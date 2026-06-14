@@ -1,5 +1,9 @@
+packages: []
+
 # pnpm 10/11 把 onlyBuiltDependencies 等设置迁到了这里（不再读 package.json 的 "pnpm" 字段）。
-# 显式放行这些依赖运行构建脚本：esbuild 的构建脚本会拉取平台原生二进制，是 vite build 必需的。
+# 显式放行这些依赖运行构建脚本：esbuild 会拉取平台原生二进制（vite build 必需），
+# @tailwindcss/oxide 为原生模块，msw 安装 service worker。
 onlyBuiltDependencies:
+  - '@tailwindcss/oxide'
   - esbuild
   - msw

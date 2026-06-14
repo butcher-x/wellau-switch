@@ -53,8 +53,10 @@ jobs:
         shell: bash
         env:
           CC_SWITCH_APP_CONFIG_DIR_NAME: .wellau-switch
+        # 仅产出 NSIS 安装器(.exe)：基础配置的自定义 WiX(per-user-main.wxs)在改名后
+        # light.exe 打包失败；NSIS 安装包已足够用于安装测试。
         run: |
-          pnpm exec tauri build \
+          pnpm exec tauri build --bundles nsis \
             --config ../wellau/tauri/tauri.wellau.conf.json \
             --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
@@ -64,5 +66,4 @@ jobs:
           name: wellau-switch-windows
           path: |
             cc-switch/src-tauri/target/release/bundle/nsis/*.exe
-            cc-switch/src-tauri/target/release/bundle/msi/*.msi
           if-no-files-found: error

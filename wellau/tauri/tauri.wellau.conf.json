@@ -1,0 +1,34 @@
+{
+  "productName": "Wellau Switch",
+  "identifier": "com.wellau.switch",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "",
+        "titleBarStyle": "Overlay",
+        "width": 720,
+        "height": 720,
+        "minWidth": 640,
+        "minHeight": 640,
+        "visible": false,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true
+      }
+    ]
+  },
+  "bundle": {
+    "resources": ["../../wellau/assets/wellau.mp4"]
+  },
+  "plugins": {
+    "deep-link": {
+      "desktop": {
+        "schemes": ["wellauswitch"]
+      }
+    },
+    "updater": {
+      "endpoints": []
+    }
+  }
+}

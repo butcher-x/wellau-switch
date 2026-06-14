@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@wellau/*": ["../wellau/*"],
+      "react": ["node_modules/@types/react"],
+      "react/jsx-runtime": ["node_modules/@types/react/jsx-runtime"],
+      "@tauri-apps/api/*": ["node_modules/@tauri-apps/api/*"],
+      "@tauri-apps/plugin-dialog": ["node_modules/@tauri-apps/plugin-dialog"],
+      "@tanstack/react-query": ["node_modules/@tanstack/react-query"],
+      "sonner": ["node_modules/sonner"],
+      "lucide-react": ["node_modules/lucide-react"],
+      "react-i18next": ["node_modules/react-i18next"]
+    },
+    "types": ["vitest/globals"]
+  },
+  "include": ["src/**/*", "tests/**/*", "../wellau/**/*"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

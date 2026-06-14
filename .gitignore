@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+**/dist/
+release/
+**/target/
+*.tsbuildinfo
+
+# Rust
+**/gen/schemas
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Logs / env / secrets
+*.log
+.env
+.env.local
+.npmrc
+
+# SSH keys (never commit)
+id_ed25519
+id_ed25519.pub
+*.pem

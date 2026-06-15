@@ -70,6 +70,21 @@ fn tail_output(output: &std::process::Output) -> String {
     }
 }
 
+/// Windows 下隐藏子进程的控制台窗口（CREATE_NO_WINDOW）；其它平台无操作。
+/// 探测/安装会起 powershell/cmd，不加这个标志每次都会闪黑框。
+fn no_window(cmd: &mut Command) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = cmd;
+    }
+}
+
 /// 流式下载并按 content-length 回报进度。
 async fn download_with_progress(
     app: &AppHandle,
@@ -178,16 +193,16 @@ fn probe_appx(app: &str) -> Option<String> {
     let script = format!(
         "(Get-AppxPackage | Where-Object {{ {filter} }} | Select-Object -First 1 -ExpandProperty PackageFullName)"
     );
-    let out = Command::new("powershell.exe")
-        .args([
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            &script,
-        ])
-        .output()
-        .ok()?;
+    let mut cmd = Command::new("powershell.exe");
+    cmd.args([
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        &script,
+    ]);
+    no_window(&mut cmd);
+    let out = cmd.output().ok()?;
     if !out.status.success() {
         return None;
     }
@@ -336,15 +351,16 @@ async fn install_msix(
     emit_progress(app, target, "install", None, "注册应用包");
     let escaped = path.to_string_lossy().replace('\'', "''");
     let out = tokio::task::spawn_blocking(move || {
-        Command::new("powershell.exe")
-            .args([
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                &format!("Add-AppxPackage -Path '{escaped}'"),
-            ])
-            .output()
+        let mut cmd = Command::new("powershell.exe");
+        cmd.args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            &format!("Add-AppxPackage -Path '{escaped}'"),
+        ]);
+        no_window(&mut cmd);
+        cmd.output()
     })
     .await
     .map_err(|e| format!("安装任务错误: {e}"))?;
@@ -397,12 +413,17 @@ pub async fn install_desktop_app(app_handle: AppHandle, app: String) -> Result<(
 
 /// 检查 npm 是否可用（用登录 shell 以拿到 nvm/homebrew 等 PATH）。
 fn npm_available() -> bool {
-    let result = if std::env::consts::OS == "windows" {
-        Command::new("cmd").args(["/C", "npm --version"]).output()
+    let mut cmd = if std::env::consts::OS == "windows" {
+        let mut c = Command::new("cmd");
+        c.args(["/C", "npm --version"]);
+        c
     } else {
-        Command::new("bash").args(["-lc", "npm --version"]).output()
+        let mut c = Command::new("bash");
+        c.args(["-lc", "npm --version"]);
+        c
     };
-    result.map(|o| o.status.success()).unwrap_or(false)
+    no_window(&mut cmd);
+    cmd.output().map(|o| o.status.success()).unwrap_or(false)
 }
 
 fn sha256_file(path: &Path) -> Result<String, String> {
@@ -511,9 +532,10 @@ async fn install_node_windows(app: &AppHandle) -> Result<(), String> {
         "Start-Process msiexec -ArgumentList '/i','\"{escaped}\"','/qn','/norestart' -Verb RunAs -Wait"
     );
     let out = tokio::task::spawn_blocking(move || {
-        Command::new("powershell.exe")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &cmd])
-            .output()
+        let mut command = Command::new("powershell.exe");
+        command.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &cmd]);
+        no_window(&mut command);
+        command.output()
     })
     .await
     .map_err(|e| format!("安装任务错误: {e}"))?;

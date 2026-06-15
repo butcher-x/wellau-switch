@@ -8,6 +8,7 @@ import {
   Download,
   Loader2,
   Minus,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -43,9 +44,11 @@ export function WellauInstallSection() {
     nodeStep,
     importStep,
     running,
+    detecting,
     needsLogin,
     summary,
     toggle,
+    detect,
     runOneClick,
   } = useWellauInstall();
 
@@ -88,15 +91,28 @@ export function WellauInstallSection() {
 
   return (
     <section className="space-y-3">
-      <header className="space-y-1">
-        <h3 className="text-sm font-medium">
-          {t("settings.install.title", { defaultValue: "环境安装" })}
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          {t("settings.install.subtitle", {
-            defaultValue: "一键安装 Claude / Codex 命令行与桌面应用，并自动导入 Key",
-          })}
-        </p>
+      <header className="flex items-start justify-between gap-2">
+        <div className="space-y-1">
+          <h3 className="text-sm font-medium">
+            {t("settings.install.title", { defaultValue: "环境安装" })}
+          </h3>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.install.subtitle", {
+              defaultValue:
+                "一键安装 Claude / Codex 命令行与桌面应用，并自动导入 Key",
+            })}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void detect()}
+          disabled={detecting || running}
+          className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+          title={t("settings.install.redetect", { defaultValue: "重新检测" })}
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${detecting ? "animate-spin" : ""}`} />
+          {t("settings.install.redetect", { defaultValue: "重新检测" })}
+        </button>
       </header>
 
       <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-border-default bg-card p-5 shadow-sm">

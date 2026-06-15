@@ -98,6 +98,7 @@ export function useWellauInstall() {
   const [nodeStep, setNodeStep] = useState<AuxStep>(IDLE_AUX);
   const [importStep, setImportStep] = useState<AuxStep>(IDLE_AUX);
   const [running, setRunning] = useState(false);
+  const [detecting, setDetecting] = useState(false);
   const [needsLogin, setNeedsLogin] = useState(false);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
 
@@ -120,29 +121,36 @@ export function useWellauInstall() {
 
   /** 探测各项已安装状态：未安装项默认勾选。 */
   const detect = useCallback(async () => {
+    setDetecting(true);
+
+    // 1. CLI：用 probe_tool_installations（纯本地扫描，不联网），避免
+    //    get_tool_versions 查 npm 最新版在受限网络下卡住导致一直「待安装」。
     try {
-      const versions = await settingsApi.getToolVersions(["claude", "codex"]);
+      const reports = await settingsApi.probeToolInstallations([
+        "claude",
+        "codex",
+      ]);
       setTargets((prev) =>
         prev.map((t) => {
           const meta = META_BY_ID.get(t.id)!;
           if (meta.kind !== "cli") return t;
-          const v = versions.find((x) => x.name === meta.tool);
-          const installed = Boolean(v?.version);
-          const latest = v?.latest_version ?? null;
+          const r = reports.find((x) => x.tool === meta.tool);
+          const inst =
+            r?.installs?.find((i) => i.runnable) ?? r?.installs?.[0] ?? null;
+          const installed = Boolean(inst);
           return {
             ...t,
             installed,
-            version: v?.version ?? null,
-            latest,
-            upgradable: isUpdateAvailable(v?.version, latest),
+            version: inst?.version ?? null,
             selected: installed ? t.selected : true,
           };
         }),
       );
     } catch (e) {
-      console.error("[WellauInstall] 探测 CLI 版本失败", e);
+      console.error("[WellauInstall] 探测 CLI 安装失败", e);
     }
 
+    // 2. 桌面应用（本地探测，不联网）。
     try {
       const apps = await installApi.probeDesktopApps(["claude", "codex"]);
       setTargets((prev) =>
@@ -160,6 +168,24 @@ export function useWellauInstall() {
       );
     } catch (e) {
       console.error("[WellauInstall] 探测桌面应用失败", e);
+    }
+
+    setDetecting(false);
+
+    // 3. 最新版本（联网，best-effort）：仅用于「可升级」徽章，失败不影响已安装判断。
+    try {
+      const versions = await settingsApi.getToolVersions(["claude", "codex"]);
+      setTargets((prev) =>
+        prev.map((t) => {
+          const meta = META_BY_ID.get(t.id)!;
+          if (meta.kind !== "cli") return t;
+          const v = versions.find((x) => x.name === meta.tool);
+          const latest = v?.latest_version ?? null;
+          return { ...t, latest, upgradable: isUpdateAvailable(t.version, latest) };
+        }),
+      );
+    } catch (e) {
+      console.error("[WellauInstall] 获取最新版本失败", e);
     }
   }, []);
 
@@ -292,6 +318,7 @@ export function useWellauInstall() {
     nodeStep,
     importStep,
     running,
+    detecting,
     needsLogin,
     summary,
     authStatus: authState.status,

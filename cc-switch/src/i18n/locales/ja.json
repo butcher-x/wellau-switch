@@ -825,6 +825,7 @@
       "subtitle": "Claude / Codex の CLI とデスクトップアプリをワンクリックで導入し、キーを自動インポート",
       "run": "ワンクリックインストール",
       "running": "インストール中…",
+      "redetect": "再検出",
       "loginHint": "インストール完了。Wellau にログインしてキーをインポートしてください",
       "importDone": "{{count}} 個のキーをインポート（Claude {{claude}} / Codex {{codex}}）",
       "targets": {

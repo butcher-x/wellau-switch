@@ -119,54 +119,126 @@ async fn download_with_progress(
 // 探测
 // ============================================================
 
-fn probe_paths(app: &str) -> Vec<PathBuf> {
-    let app_name = if app == "claude" { "Claude" } else { "Codex" };
-    let mut out = Vec::new();
+fn app_display_name(app: &str) -> &str {
+    if app == "claude" {
+        "Claude"
+    } else {
+        "Codex"
+    }
+}
+
+/// 文件系统路径探测（含 Claude 的 Squirrel 安装目录 AnthropicClaude）。
+fn probe_fs(app: &str) -> Option<String> {
+    let name = app_display_name(app);
+    let mut candidates: Vec<PathBuf> = Vec::new();
     match std::env::consts::OS {
         "macos" => {
             if let Some(home) = dirs::home_dir() {
-                out.push(home.join("Applications").join(format!("{app_name}.app")));
+                candidates.push(home.join("Applications").join(format!("{name}.app")));
             }
-            out.push(PathBuf::from(format!("/Applications/{app_name}.app")));
+            candidates.push(PathBuf::from(format!("/Applications/{name}.app")));
         }
         "windows" => {
             if let Ok(la) = std::env::var("LOCALAPPDATA") {
                 let la = PathBuf::from(la);
-                out.push(la.join(format!("Programs/{app_name}/{app_name}.exe")));
-                out.push(la.join(format!("{app_name}/{app_name}.exe")));
+                candidates.push(la.join(format!("Programs\\{name}\\{name}.exe")));
+                candidates.push(la.join(format!("{name}\\{name}.exe")));
                 if app == "claude" {
-                    out.push(la.join("AnthropicClaude/Claude.exe"));
+                    // Claude 桌面版是 Squirrel 安装：%LOCALAPPDATA%\AnthropicClaude\app-<ver>\claude.exe
+                    // 目录存在即视为已安装（带版本号子目录，精确路径不稳定）。
+                    let anthropic = la.join("AnthropicClaude");
+                    if anthropic.is_dir() {
+                        return Some(anthropic.to_string_lossy().to_string());
+                    }
                 }
             }
             if let Ok(pf) = std::env::var("ProgramFiles") {
-                out.push(PathBuf::from(pf).join(format!("{app_name}/{app_name}.exe")));
+                candidates.push(PathBuf::from(pf).join(format!("{name}\\{name}.exe")));
             }
         }
         _ => {}
     }
-    out
+    candidates
+        .into_iter()
+        .find(|c| c.exists())
+        .map(|c| c.to_string_lossy().to_string())
+}
+
+/// Windows: 通过 AppX 包探测（Codex 桌面版以 MSIX 分发，落在 WindowsApps，
+/// 固定路径找不到；Claude 若以 MSIX 分发同理）。
+fn probe_appx(app: &str) -> Option<String> {
+    if std::env::consts::OS != "windows" {
+        return None;
+    }
+    let filter = if app == "claude" {
+        "$_.Name -like '*Claude*'"
+    } else {
+        "$_.Name -like 'OpenAI.Codex*' -or $_.Name -like '*Codex*'"
+    };
+    let script = format!(
+        "(Get-AppxPackage | Where-Object {{ {filter} }} | Select-Object -First 1 -ExpandProperty PackageFullName)"
+    );
+    let out = Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            &script,
+        ])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+/// macOS: 用 Spotlight 按 bundle id 兜底（覆盖装在非 /Applications 的情况）。
+fn probe_mac_bundle(app: &str) -> Option<String> {
+    if std::env::consts::OS != "macos" {
+        return None;
+    }
+    let bundle_id = if app == "claude" {
+        "com.anthropic.claudefordesktop"
+    } else {
+        "com.openai.codex"
+    };
+    let out = Command::new("mdfind")
+        .arg(format!("kMDItemCFBundleIdentifier == '{bundle_id}'"))
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|l| l.trim())
+        .find(|l| l.ends_with(".app"))
+        .map(|l| l.to_string())
 }
 
 fn probe_one(app: &str) -> DesktopAppStatus {
-    for candidate in probe_paths(app) {
-        if candidate.exists() {
-            return DesktopAppStatus {
-                app: app.to_string(),
-                installed: true,
-                path: Some(candidate.to_string_lossy().to_string()),
-            };
-        }
-    }
+    let path = probe_fs(app)
+        .or_else(|| probe_appx(app))
+        .or_else(|| probe_mac_bundle(app));
     DesktopAppStatus {
         app: app.to_string(),
-        installed: false,
-        path: None,
+        installed: path.is_some(),
+        path,
     }
 }
 
 #[tauri::command]
-pub fn probe_desktop_apps(apps: Vec<String>) -> Vec<DesktopAppStatus> {
-    apps.iter().map(|app| probe_one(app)).collect()
+pub async fn probe_desktop_apps(apps: Vec<String>) -> Result<Vec<DesktopAppStatus>, String> {
+    tokio::task::spawn_blocking(move || apps.iter().map(|app| probe_one(app)).collect())
+        .await
+        .map_err(|e| format!("探测任务错误: {e}"))
 }
 
 // ============================================================

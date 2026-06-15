@@ -825,6 +825,7 @@
       "subtitle": "Install Claude / Codex CLIs and desktop apps in one click, then import keys",
       "run": "Install",
       "running": "Installing…",
+      "redetect": "Re-detect",
       "loginHint": "Installation complete. Sign in to Wellau to import keys",
       "importDone": "Imported {{count}} key(s) (Claude {{claude}} / Codex {{codex}})",
       "targets": {

@@ -825,6 +825,7 @@
       "subtitle": "一键安装 Claude / Codex 命令行与桌面应用，并自动导入 Key",
       "run": "一键安装",
       "running": "安装中…",
+      "redetect": "重新检测",
       "loginHint": "安装完成，请登录 Wellau 以导入 Key",
       "importDone": "已导入 {{count}} 个 Key（Claude {{claude}} / Codex {{codex}}）",
       "targets": {

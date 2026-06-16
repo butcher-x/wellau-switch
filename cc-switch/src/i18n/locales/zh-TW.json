@@ -793,12 +793,9 @@
     "localEnvCheck": "本地環境檢查",
     "install": {
       "title": "環境安裝",
-      "subtitle": "一鍵安裝 Claude / Codex 命令列與桌面應用，並自動匯入 Key",
-      "run": "一鍵安裝",
-      "running": "安裝中…",
+      "subtitle": "點擊每項右側標籤即可單獨安裝或升級 Claude / Codex",
+      "running": "處理中…",
       "redetect": "重新偵測",
-      "loginHint": "安裝完成，請登入 Wellau 以匯入 Key",
-      "importDone": "已匯入 {{count}} 個 Key（Claude {{claude}} / Codex {{codex}}）",
       "targets": {
         "claudeCli": "Claude Code CLI",
         "claudeDesktop": "Claude 桌面版",
@@ -806,14 +803,15 @@
         "codexDesktop": "Codex 桌面版"
       },
       "badge": {
-        "pending": "待安裝",
-        "installed": "已安裝",
-        "installedVersion": "已安裝 {{version}}",
-        "upgradable": "可升級 {{from}} → {{to}}"
+        "installed": "已安裝"
       },
-      "steps": {
-        "node": "安裝 Node.js",
-        "import": "匯入 Key"
+      "action": {
+        "install": "安裝",
+        "upgrade": "升級 {{from}} → {{to}}"
+      },
+      "toast": {
+        "installed": "{{name}} 安裝完成",
+        "upgraded": "{{name}} 已升級"
       }
     },
     "envBadge": {

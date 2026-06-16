@@ -1,20 +1,17 @@
-name: Build Windows (Wellau Switch)
+name: Build Windows (Wellau Router)
 
-# 在 Windows runner 上编译 Wellau Switch 桌面端。
-# - 手动触发：Actions 页面 "Run workflow"
-# - 打 tag（v 开头）时自动触发
+# 在 Windows runner 上编译 Wellau Router 桌面端（仅供内部测试快速出包）。
+# - 仅手动触发：Actions 页面 "Run workflow"
+# - 正式发版（带自动更新）请用 release.yml（打 v 开头的 tag 触发）。
 #
 # 说明：
 # - 仓库根需同时包含 cc-switch/ 与 wellau/（@wellau/* 解析到 ../wellau）。
-# - 用 --config 叠加 wellau 覆盖配置；并临时关闭 createUpdaterArtifacts，
-#   这样无需 Tauri 更新器签名密钥即可出包（仅用于内部测试包）。
-# - 产物：NSIS 安装器(.exe) 与 MSI(.msi)。
+# - 用 --config 叠加 wellau 覆盖配置；并关闭 createUpdaterArtifacts，
+#   这样无需 Tauri 更新器签名密钥即可出包（仅用于内部测试包，不含自动更新）。
+# - 产物：NSIS 安装器(.exe)。
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
 
 jobs:
   build-windows:
@@ -49,7 +46,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Wellau Switch (Windows)
+      - name: Build Wellau Router (Windows)
         shell: bash
         env:
           CC_SWITCH_APP_CONFIG_DIR_NAME: .wellau-switch
@@ -63,7 +60,7 @@ jobs:
       - name: Upload installers
         uses: actions/upload-artifact@v4
         with:
-          name: wellau-switch-windows
+          name: wellau-router-windows
           path: |
             cc-switch/src-tauri/target/release/bundle/nsis/*.exe
           if-no-files-found: error

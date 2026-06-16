@@ -3,8 +3,6 @@ import { listen } from "@tauri-apps/api/event";
 import { settingsApi } from "@/lib/api/settings";
 import { installApi, type DesktopAppId } from "@/lib/api/install";
 import { isUpdateAvailable } from "@/lib/version";
-import { useWellauAuth } from "@wellau/auth/WellauAuthProvider";
-import type { ImportSummary } from "@wellau/auth/types";
 
 export type TargetId =
   | "claude-cli"
@@ -13,12 +11,12 @@ export type TargetId =
   | "codex-desktop";
 
 export type TargetKind = "cli" | "desktop";
-export type StepStatus = "idle" | "running" | "done" | "error" | "skipped";
+export type StepStatus = "idle" | "running" | "done" | "error";
 
 interface TargetMeta {
   id: TargetId;
   kind: TargetKind;
-  /** CLI 工具名（对应 run_tool_lifecycle_action / get_tool_versions）。 */
+  /** CLI 工具名（对应 run_tool_lifecycle_action / probe_tool_installations）。 */
   tool?: "claude" | "codex";
   /** 桌面应用 id（对应 install_desktop_app / probe_desktop_apps）。 */
   app?: DesktopAppId;
@@ -37,17 +35,10 @@ const META_BY_ID = new Map(INSTALL_TARGETS.map((m) => [m.id, m]));
 
 export interface TargetState {
   id: TargetId;
-  selected: boolean;
   installed: boolean;
   version: string | null;
   latest: string | null;
   upgradable: boolean;
-  status: StepStatus;
-  progress: number | null;
-  error: string | null;
-}
-
-export interface AuxStep {
   status: StepStatus;
   progress: number | null;
   error: string | null;
@@ -60,12 +51,9 @@ interface InstallProgressPayload {
   message: string;
 }
 
-const IDLE_AUX: AuxStep = { status: "idle", progress: null, error: null };
-
 function initialTargets(): TargetState[] {
   return INSTALL_TARGETS.map((m) => ({
     id: m.id,
-    selected: false,
     installed: false,
     version: null,
     latest: null,
@@ -85,46 +73,28 @@ function errMessage(e: unknown): string {
 }
 
 /**
- * 「设置 → 通用 → 环境安装」一键安装编排。
+ * 「设置 → 通用 → 环境安装」逐项安装/升级编排。
  *
- * 复用已迁移的后端能力：CLI 走 run_tool_lifecycle_action / get_tool_versions，
- * 桌面应用走 install_desktop_app，登录/导入走 useWellauAuth + importWellauKeys。
- * 仅新增 Node 自举（install_node，幂等：已有 npm 则后端直接跳过）。
+ * 每项独立操作（点击行内标签即触发）：CLI 走 run_tool_lifecycle_action（缺 npm
+ * 先 install_node，幂等），桌面应用走 install_desktop_app。登录与 Key 导入由上方
+ * 「Wellau 账户」区负责，这里只管工具的安装与升级。
  */
 export function useWellauInstall() {
-  const { state: authState, importKeys } = useWellauAuth();
-
   const [targets, setTargets] = useState<TargetState[]>(initialTargets);
-  const [nodeStep, setNodeStep] = useState<AuxStep>(IDLE_AUX);
-  const [importStep, setImportStep] = useState<AuxStep>(IDLE_AUX);
-  const [running, setRunning] = useState(false);
   const [detecting, setDetecting] = useState(false);
-  const [needsLogin, setNeedsLogin] = useState(false);
-  const [summary, setSummary] = useState<ImportSummary | null>(null);
 
   const targetsRef = useRef(targets);
   targetsRef.current = targets;
 
   const patchTarget = useCallback((id: TargetId, patch: Partial<TargetState>) => {
-    setTargets((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...patch } : t)),
-    );
+    setTargets((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
   }, []);
 
-  const toggle = useCallback(
-    (id: TargetId, selected: boolean) => {
-      if (running) return;
-      patchTarget(id, { selected });
-    },
-    [running, patchTarget],
-  );
-
-  /** 探测各项已安装状态：未安装项默认勾选。 */
+  /** 探测各项已安装状态（本地扫描，不联网）。 */
   const detect = useCallback(async () => {
     setDetecting(true);
 
-    // 1. CLI：用 probe_tool_installations（纯本地扫描，不联网），避免
-    //    get_tool_versions 查 npm 最新版在受限网络下卡住导致一直「待安装」。
+    // CLI：probe_tool_installations 纯本地扫描，避免联网查 npm 最新版卡住。
     try {
       const reports = await settingsApi.probeToolInstallations([
         "claude",
@@ -137,12 +107,11 @@ export function useWellauInstall() {
           const r = reports.find((x) => x.tool === meta.tool);
           const inst =
             r?.installs?.find((i) => i.runnable) ?? r?.installs?.[0] ?? null;
-          const installed = Boolean(inst);
           return {
             ...t,
-            installed,
+            installed: Boolean(inst),
             version: inst?.version ?? null,
-            selected: installed ? t.selected : true,
+            status: "idle",
           };
         }),
       );
@@ -150,7 +119,7 @@ export function useWellauInstall() {
       console.error("[WellauInstall] 探测 CLI 安装失败", e);
     }
 
-    // 2. 桌面应用（本地探测，不联网）。
+    // 桌面应用（本地探测，不联网）。
     try {
       const apps = await installApi.probeDesktopApps(["claude", "codex"]);
       setTargets((prev) =>
@@ -158,12 +127,7 @@ export function useWellauInstall() {
           const meta = META_BY_ID.get(t.id)!;
           if (meta.kind !== "desktop") return t;
           const s = apps.find((a) => a.app === meta.app);
-          const installed = Boolean(s?.installed);
-          return {
-            ...t,
-            installed,
-            selected: installed ? t.selected : true,
-          };
+          return { ...t, installed: Boolean(s?.installed), status: "idle" };
         }),
       );
     } catch (e) {
@@ -172,7 +136,7 @@ export function useWellauInstall() {
 
     setDetecting(false);
 
-    // 3. 最新版本（联网，best-effort）：仅用于「可升级」徽章，失败不影响已安装判断。
+    // 最新版本（联网 best-effort）：仅用于「可升级」徽章。
     try {
       const versions = await settingsApi.getToolVersions(["claude", "codex"]);
       setTargets((prev) =>
@@ -193,16 +157,12 @@ export function useWellauInstall() {
     void detect();
   }, [detect]);
 
-  // 后端下载/安装进度事件 → 对应步骤的 progress。
+  // 桌面/Node 下载安装进度事件 → 对应行的 progress。
   useEffect(() => {
     const unlisten = listen<InstallProgressPayload>(
       "install-progress",
       (ev) => {
         const { target, percent } = ev.payload;
-        if (target === "node") {
-          setNodeStep((s) => ({ ...s, progress: percent }));
-          return;
-        }
         if (META_BY_ID.has(target as TargetId)) {
           patchTarget(target as TargetId, { progress: percent });
         }
@@ -213,117 +173,64 @@ export function useWellauInstall() {
     };
   }, [patchTarget]);
 
-  // 触发登录后由 WellauAuthProvider.login 自动导入；这里同步反映导入步骤完成。
-  useEffect(() => {
-    if (needsLogin && authState.status === "authenticated") {
-      setNeedsLogin(false);
-      setImportStep({ status: "done", progress: null, error: null });
-    }
-  }, [needsLogin, authState.status]);
+  /** 单项安装/升级。成功返回 null，失败返回错误信息（供 UI toast）。 */
+  const installOne = useCallback(
+    async (id: TargetId): Promise<string | null> => {
+      const meta = META_BY_ID.get(id);
+      const target = targetsRef.current.find((t) => t.id === id);
+      if (!meta || !target) return null;
+      // 已安装且无可升级则无需操作。
+      if (target.installed && !target.upgradable) return null;
 
-  const runOneClick = useCallback(async () => {
-    setRunning(true);
-    setSummary(null);
-    setNeedsLogin(false);
-    setNodeStep(IDLE_AUX);
-    setImportStep(IDLE_AUX);
-
-    const selected = targetsRef.current.filter((t) => t.selected);
-    const clis = selected.filter((t) => META_BY_ID.get(t.id)!.kind === "cli");
-    const desktops = selected.filter(
-      (t) => META_BY_ID.get(t.id)!.kind === "desktop",
-    );
-
-    // 重置被选项状态。
-    for (const t of selected) {
-      patchTarget(t.id, { status: "idle", progress: null, error: null });
-    }
-
-    // 1. Node 自举（仅在需要装 CLI 时）。install_node 幂等：已有 npm 则后端直接跳过。
-    if (clis.some((t) => !t.installed)) {
-      setNodeStep({ status: "running", progress: null, error: null });
+      patchTarget(id, { status: "running", error: null, progress: null });
       try {
-        await installApi.installNode();
-        setNodeStep({ status: "done", progress: null, error: null });
+        if (meta.kind === "cli") {
+          const tool = meta.tool!;
+          // 缺 npm 先自举 Node（install_node 幂等：已有 npm 直接跳过）。
+          if (!target.installed) {
+            try {
+              await installApi.installNode();
+            } catch (e) {
+              console.error("[WellauInstall] Node 自举失败（继续尝试 CLI）", e);
+            }
+          }
+          const action = target.installed ? "update" : "install";
+          await settingsApi.runToolLifecycleAction([tool], action);
+          const reports = await settingsApi.probeToolInstallations([tool]);
+          const r = reports.find((x) => x.tool === tool);
+          const inst =
+            r?.installs?.find((i) => i.runnable) ?? r?.installs?.[0] ?? null;
+          patchTarget(id, {
+            status: "done",
+            installed: Boolean(inst),
+            version: inst?.version ?? null,
+            upgradable: inst
+              ? isUpdateAvailable(inst.version, target.latest)
+              : target.upgradable,
+            progress: null,
+          });
+        } else {
+          const app = meta.app!;
+          await installApi.installDesktopApp(app);
+          patchTarget(id, { status: "done", installed: true, progress: null });
+        }
+        return null;
       } catch (e) {
-        // npm 可能本就存在；不阻断后续 CLI 安装，失败仅记录。
-        setNodeStep({ status: "error", progress: null, error: errMessage(e) });
+        const msg = errMessage(e);
+        patchTarget(id, { status: "error", error: msg, progress: null });
+        return msg;
       }
-    }
+    },
+    [patchTarget],
+  );
 
-    // 2. CLI：未装→install；已装且可升级→update；已装且最新→skip。
-    for (const t of clis) {
-      const meta = META_BY_ID.get(t.id)!;
-      const tool = meta.tool!;
-      if (t.installed && !t.upgradable) {
-        patchTarget(t.id, { status: "skipped" });
-        continue;
-      }
-      const action = t.installed ? "update" : "install";
-      patchTarget(t.id, { status: "running", error: null });
-      try {
-        await settingsApi.runToolLifecycleAction([tool], action);
-        const refreshed = await settingsApi.getToolVersions([tool]);
-        const v = refreshed.find((x) => x.name === tool);
-        patchTarget(t.id, {
-          status: "done",
-          installed: Boolean(v?.version),
-          version: v?.version ?? null,
-          latest: v?.latest_version ?? null,
-          upgradable: isUpdateAvailable(v?.version, v?.latest_version),
-          progress: null,
-        });
-      } catch (e) {
-        patchTarget(t.id, { status: "error", error: errMessage(e) });
-      }
-    }
-
-    // 3. 桌面应用：已装→skip；否则下载安装（macOS 落 ~/Applications）。
-    for (const t of desktops) {
-      const meta = META_BY_ID.get(t.id)!;
-      const app = meta.app!;
-      if (t.installed) {
-        patchTarget(t.id, { status: "skipped" });
-        continue;
-      }
-      patchTarget(t.id, { status: "running", error: null });
-      try {
-        await installApi.installDesktopApp(app);
-        patchTarget(t.id, { status: "done", installed: true, progress: null });
-      } catch (e) {
-        patchTarget(t.id, { status: "error", error: errMessage(e) });
-      }
-    }
-
-    // 4. 登录 + 导入 Key。
-    if (authState.status === "authenticated") {
-      setImportStep({ status: "running", progress: null, error: null });
-      try {
-        const s = await importKeys();
-        setSummary(s);
-        setImportStep({ status: "done", progress: null, error: null });
-      } catch (e) {
-        setImportStep({ status: "error", progress: null, error: errMessage(e) });
-      }
-    } else {
-      // 未登录：交给内联登录表单，登录成功后 Provider 自动导入。
-      setNeedsLogin(true);
-    }
-
-    setRunning(false);
-  }, [authState.status, importKeys, patchTarget]);
+  const busy = targets.some((t) => t.status === "running");
 
   return {
     targets,
-    nodeStep,
-    importStep,
-    running,
     detecting,
-    needsLogin,
-    summary,
-    authStatus: authState.status,
-    toggle,
+    busy,
     detect,
-    runOneClick,
+    installOne,
   };
 }

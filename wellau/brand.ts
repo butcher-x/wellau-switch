@@ -1,5 +1,5 @@
 export const wellauBrand = {
-  productName: "Wellau Switch",
+  productName: "Wellau Router",
   shortName: "Wellau",
   description: "Wellau-powered assistant switcher built on the CC Switch core.",
   websiteUrl: "https://wellau.com",

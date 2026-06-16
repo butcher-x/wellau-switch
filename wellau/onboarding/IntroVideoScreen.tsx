@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import introVideoUrl from "@wellau/assets/wellau.mp4";
+import { wellauBrand } from "@wellau/brand";
 
 interface IntroVideoScreenProps {
   onComplete: () => void;
@@ -28,7 +29,7 @@ export function IntroVideoScreen({ onComplete }: IntroVideoScreenProps) {
     <div className="flex h-screen w-screen items-center justify-center overflow-hidden bg-black text-white">
       {failed ? (
         <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-6 text-center">
-          <h1 className="text-2xl font-semibold">Wellau Switch</h1>
+          <h1 className="text-2xl font-semibold">{wellauBrand.productName}</h1>
           <p className="text-sm text-white/70">
             首登视频加载失败。你可以继续进入登录页。
           </p>

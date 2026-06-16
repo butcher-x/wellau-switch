@@ -1,93 +1,43 @@
-import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
-import {
-  AlertCircle,
-  Check,
-  CircleDashed,
-  Download,
-  Loader2,
-  Minus,
-  RefreshCw,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { WellauLoginForm } from "@wellau/auth/components/WellauLoginForm";
+import { ArrowUpCircle, Check, Download, Loader2, RefreshCw } from "lucide-react";
 import {
   INSTALL_TARGETS,
   useWellauInstall,
-  type AuxStep,
-  type StepStatus,
   type TargetState,
 } from "@wellau/install/useWellauInstall";
 
-function StatusIcon({ status }: { status: StepStatus }) {
-  switch (status) {
-    case "running":
-      return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
-    case "done":
-      return <Check className="h-4 w-4 text-green-500" />;
-    case "error":
-      return <AlertCircle className="h-4 w-4 text-red-500" />;
-    case "skipped":
-      return <Minus className="h-4 w-4 text-muted-foreground" />;
-    default:
-      return <CircleDashed className="h-4 w-4 text-muted-foreground" />;
-  }
-}
-
 export function WellauInstallSection() {
   const { t } = useTranslation();
-  const {
-    targets,
-    nodeStep,
-    importStep,
-    running,
-    detecting,
-    needsLogin,
-    summary,
-    toggle,
-    detect,
-    runOneClick,
-  } = useWellauInstall();
+  const { targets, detecting, busy, detect, installOne } = useWellauInstall();
 
-  const summaryShown = useRef<ImportSummaryRef>(null);
-  useEffect(() => {
-    if (summary && summary !== summaryShown.current) {
-      summaryShown.current = summary;
-      toast.success(
-        t("settings.install.importDone", {
-          count: summary.imported,
-          claude: summary.claude,
-          codex: summary.codex,
-          defaultValue:
-            "已导入 {{count}} 个 Key（Claude {{claude}} / Codex {{codex}}）",
-        }),
-      );
-    }
-  }, [summary, t]);
-
-  const tip = (target: TargetState): string => {
-    if (target.upgradable && target.version && target.latest) {
-      return t("settings.install.badge.upgradable", {
-        from: target.version,
-        to: target.latest,
-        defaultValue: "可升级 {{from}} → {{to}}",
-      });
-    }
-    if (target.installed) {
-      return target.version
-        ? t("settings.install.badge.installedVersion", {
-            version: target.version,
-            defaultValue: "已安装 {{version}}",
-          })
-        : t("settings.install.badge.installed", { defaultValue: "已安装" });
-    }
-    return t("settings.install.badge.pending", { defaultValue: "待安装" });
+  const nameOf = (target: TargetState): string => {
+    const meta = INSTALL_TARGETS.find((m) => m.id === target.id)!;
+    return t(`settings.install.targets.${meta.nameKey}`, {
+      defaultValue: meta.id,
+    });
   };
 
-  const selectedCount = targets.filter((x) => x.selected).length;
+  const handleAction = async (target: TargetState) => {
+    const name = nameOf(target);
+    const isUpgrade = target.installed && target.upgradable;
+    const err = await installOne(target.id);
+    if (err) {
+      toast.error(`${name}：${err}`);
+      return;
+    }
+    toast.success(
+      isUpgrade
+        ? t("settings.install.toast.upgraded", {
+            name,
+            defaultValue: "{{name}} 已升级",
+          })
+        : t("settings.install.toast.installed", {
+            name,
+            defaultValue: "{{name}} 安装完成",
+          }),
+    );
+  };
 
   return (
     <section className="space-y-3">
@@ -98,15 +48,14 @@ export function WellauInstallSection() {
           </h3>
           <p className="text-xs text-muted-foreground">
             {t("settings.install.subtitle", {
-              defaultValue:
-                "一键安装 Claude / Codex 命令行与桌面应用，并自动导入 Key",
+              defaultValue: "点击每项右侧标签即可单独安装或升级 Claude / Codex",
             })}
           </p>
         </div>
         <button
           type="button"
           onClick={() => void detect()}
-          disabled={detecting || running}
+          disabled={detecting || busy}
           className="flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
           title={t("settings.install.redetect", { defaultValue: "重新检测" })}
         >
@@ -115,118 +64,95 @@ export function WellauInstallSection() {
         </button>
       </header>
 
-      <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-border-default bg-card p-5 shadow-sm">
-        <ul className="flex flex-col gap-2.5">
-          {targets.map((target) => {
-            const meta = INSTALL_TARGETS.find((m) => m.id === target.id)!;
-            return (
-              <li key={target.id} className="flex items-center gap-3">
-                <Checkbox
-                  id={`install-${target.id}`}
-                  checked={target.selected}
-                  disabled={running}
-                  onCheckedChange={(v) => toggle(target.id, v === true)}
-                />
-                <label
-                  htmlFor={`install-${target.id}`}
-                  className="min-w-0 flex-1 cursor-pointer truncate text-sm"
-                >
-                  {t(`settings.install.targets.${meta.nameKey}`, {
-                    defaultValue: meta.id,
-                  })}
-                </label>
-                <Badge
-                  variant={target.upgradable ? "default" : "secondary"}
-                  className="shrink-0 font-normal"
-                >
-                  {tip(target)}
-                </Badge>
-                {target.status !== "idle" && (
-                  <span className="flex w-8 shrink-0 items-center justify-end gap-1">
-                    {target.progress != null && target.status === "running" && (
-                      <span className="text-[10px] text-muted-foreground">
-                        {target.progress}%
-                      </span>
-                    )}
-                    <StatusIcon status={target.status} />
-                  </span>
-                )}
-              </li>
-            );
-          })}
+      <div className="flex w-full max-w-md flex-col rounded-xl border border-border-default bg-card p-2 shadow-sm">
+        <ul className="flex flex-col">
+          {targets.map((target) => (
+            <li
+              key={target.id}
+              className="flex items-center gap-3 rounded-lg px-3 py-2.5"
+            >
+              <span className="min-w-0 flex-1 truncate text-sm">
+                {nameOf(target)}
+              </span>
+              <ActionCell
+                target={target}
+                busy={busy}
+                onAction={() => void handleAction(target)}
+                t={t}
+              />
+            </li>
+          ))}
         </ul>
-
-        <Button
-          onClick={() => void runOneClick()}
-          disabled={running || selectedCount === 0}
-          className="w-full"
-        >
-          {running ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              {t("settings.install.running", { defaultValue: "安装中…" })}
-            </>
-          ) : (
-            <>
-              <Download className="h-4 w-4" />
-              {t("settings.install.run", { defaultValue: "一键安装" })}
-            </>
-          )}
-        </Button>
-
-        {(nodeStep.status !== "idle" || importStep.status !== "idle") && (
-          <div className="flex flex-col gap-2 border-t border-border-default pt-3">
-            {nodeStep.status !== "idle" && (
-              <AuxRow
-                label={t("settings.install.steps.node", {
-                  defaultValue: "安装 Node.js",
-                })}
-                step={nodeStep}
-              />
-            )}
-            {importStep.status !== "idle" && (
-              <AuxRow
-                label={t("settings.install.steps.import", {
-                  defaultValue: "导入 Key",
-                })}
-                step={importStep}
-              />
-            )}
-          </div>
-        )}
-
-        {needsLogin && (
-          <div className="border-t border-border-default pt-3">
-            <p className="mb-2 text-xs text-muted-foreground">
-              {t("settings.install.loginHint", {
-                defaultValue: "安装完成，请登录 Wellau 以导入 Key",
-              })}
-            </p>
-            <WellauLoginForm />
-          </div>
-        )}
       </div>
     </section>
   );
 }
 
-function AuxRow({ label, step }: { label: string; step: AuxStep }) {
+function ActionCell({
+  target,
+  busy,
+  onAction,
+  t,
+}: {
+  target: TargetState;
+  busy: boolean;
+  onAction: () => void;
+  t: ReturnType<typeof useTranslation>["t"];
+}) {
+  if (target.status === "running") {
+    return (
+      <span className="flex shrink-0 items-center gap-1.5 px-2 text-xs text-blue-500">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        {target.progress != null
+          ? `${target.progress}%`
+          : t("settings.install.running", { defaultValue: "处理中…" })}
+      </span>
+    );
+  }
+
+  // 已安装且没有可升级 → 静态「已安装」。
+  if (target.installed && !target.upgradable) {
+    return (
+      <span className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+        <Check className="h-3.5 w-3.5 text-green-500" />
+        {t("settings.install.badge.installed", { defaultValue: "已安装" })}
+      </span>
+    );
+  }
+
+  // 可操作：升级（蓝色）或安装（主色）。
+  const isUpgrade = target.installed && target.upgradable;
+  const label = isUpgrade
+    ? t("settings.install.action.upgrade", {
+        from: target.version,
+        to: target.latest,
+        defaultValue: "升级 {{from}} → {{to}}",
+      })
+    : t("settings.install.action.install", { defaultValue: "安装" });
+
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <StatusIcon status={step.status} />
-      <span className="flex-1 truncate text-muted-foreground">{label}</span>
-      {step.progress != null && step.status === "running" && (
-        <span className="text-[10px] text-muted-foreground">
-          {step.progress}%
-        </span>
+    <button
+      type="button"
+      onClick={onAction}
+      disabled={busy}
+      title={
+        target.status === "error" && target.error
+          ? target.error
+          : undefined
+      }
+      className={[
+        "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50",
+        isUpgrade
+          ? "bg-blue-500 text-white hover:bg-blue-600"
+          : "bg-primary text-primary-foreground hover:bg-primary/90",
+      ].join(" ")}
+    >
+      {isUpgrade ? (
+        <ArrowUpCircle className="h-3.5 w-3.5" />
+      ) : (
+        <Download className="h-3.5 w-3.5" />
       )}
-      {step.error && (
-        <span className="max-w-[60%] truncate text-red-500" title={step.error}>
-          {step.error}
-        </span>
-      )}
-    </div>
+      {label}
+    </button>
   );
 }
-
-type ImportSummaryRef = ReturnType<typeof useWellauInstall>["summary"];

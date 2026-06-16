@@ -822,12 +822,9 @@
     "toolUpgradeUnanchoredHint": "Can't determine which install your command line uses; will run the default upgrade command (may install to the first npm on PATH).",
     "install": {
       "title": "Environment Setup",
-      "subtitle": "Install Claude / Codex CLIs and desktop apps in one click, then import keys",
-      "run": "Install",
-      "running": "Installing…",
+      "subtitle": "Click the label on each item to install or upgrade Claude / Codex individually",
+      "running": "Working…",
       "redetect": "Re-detect",
-      "loginHint": "Installation complete. Sign in to Wellau to import keys",
-      "importDone": "Imported {{count}} key(s) (Claude {{claude}} / Codex {{codex}})",
       "targets": {
         "claudeCli": "Claude Code CLI",
         "claudeDesktop": "Claude Desktop",
@@ -835,14 +832,15 @@
         "codexDesktop": "Codex Desktop"
       },
       "badge": {
-        "pending": "Not installed",
-        "installed": "Installed",
-        "installedVersion": "Installed {{version}}",
-        "upgradable": "Update {{from}} → {{to}}"
+        "installed": "Installed"
       },
-      "steps": {
-        "node": "Install Node.js",
-        "import": "Import keys"
+      "action": {
+        "install": "Install",
+        "upgrade": "Update {{from}} → {{to}}"
+      },
+      "toast": {
+        "installed": "{{name}} installed",
+        "upgraded": "{{name}} upgraded"
       }
     },
     "envBadge": {

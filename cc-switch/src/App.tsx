@@ -349,6 +349,22 @@ function App() {
       try {
         const off = await providersApi.onSwitched(
           async (event: ProviderSwitchEvent) => {
+            // 后端在「启用故障转移」与「自动故障热切」完成切换后都会 emit 此事件。
+            // 仅重拉 providers 不够：故障转移徽章（健康/优先级）还依赖队列、开关、
+            // 代理接管状态与各供应商健康状态。这里一并失效，避免必须切换 App 才刷新。
+            await Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["proxyStatus"] }),
+              queryClient.invalidateQueries({
+                queryKey: ["proxyTakeoverStatus"],
+              }),
+              queryClient.invalidateQueries({
+                queryKey: ["autoFailoverEnabled", event.appType],
+              }),
+              queryClient.invalidateQueries({
+                queryKey: ["failoverQueue", event.appType],
+              }),
+              queryClient.invalidateQueries({ queryKey: ["providerHealth"] }),
+            ]);
             if (event.appType === activeApp) {
               await refetch();
             }
@@ -369,7 +385,7 @@ function App() {
       active = false;
       unsubscribe?.();
     };
-  }, [activeApp, refetch]);
+  }, [activeApp, refetch, queryClient]);
 
   useTauriEvent("universal-provider-synced", async () => {
     await queryClient.invalidateQueries({ queryKey: ["providers"] });

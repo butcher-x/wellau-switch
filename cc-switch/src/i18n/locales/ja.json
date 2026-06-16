@@ -822,12 +822,9 @@
     "toolUpgradeUnanchoredHint": "コマンドラインが実際に使用する箇所を特定できません。既定のアップグレードコマンドを実行します（PATH 上の最初の npm にインストールされる場合があります）。",
     "install": {
       "title": "環境セットアップ",
-      "subtitle": "Claude / Codex の CLI とデスクトップアプリをワンクリックで導入し、キーを自動インポート",
-      "run": "ワンクリックインストール",
-      "running": "インストール中…",
+      "subtitle": "各項目右側のラベルをクリックして Claude / Codex を個別にインストール・更新できます",
+      "running": "処理中…",
       "redetect": "再検出",
-      "loginHint": "インストール完了。Wellau にログインしてキーをインポートしてください",
-      "importDone": "{{count}} 個のキーをインポート（Claude {{claude}} / Codex {{codex}}）",
       "targets": {
         "claudeCli": "Claude Code CLI",
         "claudeDesktop": "Claude デスクトップ",
@@ -835,14 +832,15 @@
         "codexDesktop": "Codex デスクトップ"
       },
       "badge": {
-        "pending": "未インストール",
-        "installed": "インストール済み",
-        "installedVersion": "インストール済み {{version}}",
-        "upgradable": "更新 {{from}} → {{to}}"
+        "installed": "インストール済み"
       },
-      "steps": {
-        "node": "Node.js をインストール",
-        "import": "キーをインポート"
+      "action": {
+        "install": "インストール",
+        "upgrade": "更新 {{from}} → {{to}}"
+      },
+      "toast": {
+        "installed": "{{name}} をインストールしました",
+        "upgraded": "{{name}} を更新しました"
       }
     },
     "envBadge": {

@@ -40,8 +40,10 @@ jobs:
             args: "--bundles nsis --config ../wellau/tauri/tauri.wellau.conf.json"
           - platform: macos-latest # Apple Silicon -> darwin-aarch64
             args: "--bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"
-          - platform: macos-13 # Intel -> darwin-x86_64
-            args: "--bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"
+          # Intel(macos-13/darwin-x86_64)按需关闭：只发布 Windows + Apple Silicon。
+          # 如需恢复 Intel 自动更新，取消下面两行注释即可。
+          # - platform: macos-13
+          #   args: "--bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"
     runs-on: ${{ matrix.platform }}
     steps:
       - name: Checkout

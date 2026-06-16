@@ -209,14 +209,53 @@ pub async fn run_tool_lifecycle_action(
 /// 不再弹出可见终端窗口（与 `launch_terminal_running` 的"开窗即返回"形成对比，
 /// 后者仍保留给 provider 切换等需要交互式终端的场景）。
 /// 失败时回传 stderr/stdout 末尾若干行，供前端 toast 提示。
+/// 获取用户登录 shell 解析后的 PATH（含 nvm/homebrew/volta/fnm 等目录）。
+///
+/// GUI 应用从 Finder/Dock 启动时不继承交互 shell 的 PATH，默认极简（仅
+/// `/usr/bin:/bin` 等），缺少 `node`/`npm`。这会导致 `claude`（`#!/usr/bin/env node`
+/// 脚本）执行时报 `env: node: No such file or directory`，npm 兜底安装也失败。
+/// 检测路径已用 `$SHELL -lic` 规避了该问题，这里给静默执行路径补齐同样的 PATH。
+#[cfg(not(target_os = "windows"))]
+fn login_shell_path() -> Option<String> {
+    use std::process::Command;
+    let shell = std::env::var("SHELL")
+        .ok()
+        .filter(|s| is_valid_shell(s))
+        .unwrap_or_else(|| "bash".to_string());
+    let flag = default_flag_for_shell(&shell);
+    let out = Command::new(&shell)
+        .arg(flag)
+        .arg("printf %s \"$PATH\"")
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if path.is_empty() {
+        None
+    } else {
+        Some(path)
+    }
+}
+
 #[cfg(not(target_os = "windows"))]
 fn run_tool_lifecycle_silently(command_line: &str, _label: &str) -> Result<(), String> {
     use std::process::Command;
     // command_line 是 bash 风格脚本（含 `set -e` 与多行命令）；强制用 bash 执行，
     // 避免用户默认 shell 为 fish/zsh 时 `set -e` 等语义不一致。
-    let output = Command::new("bash")
-        .arg("-c")
-        .arg(command_line)
+    let mut cmd = Command::new("bash");
+    cmd.arg("-c").arg(command_line);
+    // 用登录 shell 的 PATH 覆盖子进程 PATH，确保 node/npm 可见（见 login_shell_path）。
+    // 合并当前 PATH 作兜底，避免登录 shell 缺失系统目录。
+    if let Some(login_path) = login_shell_path() {
+        let merged = match std::env::var("PATH") {
+            Ok(cur) if !cur.is_empty() => format!("{login_path}:{cur}"),
+            _ => login_path,
+        };
+        cmd.env("PATH", merged);
+    }
+    let output = cmd
         .output()
         .map_err(|e| format!("启动安装进程失败: {e}"))?;
     finish_lifecycle_output(&output)

@@ -2120,7 +2120,14 @@ fn anchored_command_from_paths(tool: &str, bin_path: &str, real_target: &str) ->
     }
     if prefers_official_update(tool, LifecycleCommandShell::Posix) {
         let update = anchored_official_update_command(tool, bin_path)?;
-        return Some(match package_command {
+        // Codex 的 self-update 只在部分 release 可用，失败会抛 Rust 回溯；它主要经 npm
+        // 分发，故锚定不到同级包管理器（装在 system/未知来源）时，仍退回静态
+        // `npm i -g @openai/codex@latest` 作兜底，避免只剩会 panic 的裸 `codex update`。
+        // bare `npm` 依赖 PATH，已由 run_tool_lifecycle_silently 注入登录 shell 的 PATH。
+        // claude/opencode/openclaw 的原生自升级可靠，保持无包兜底的既有行为。
+        let fallback = package_command
+            .or_else(|| (tool == "codex").then(|| "npm i -g @openai/codex@latest".to_string()));
+        return Some(match fallback {
             Some(fallback) => chain_update_commands(update, fallback, LifecycleCommandShell::Posix),
             None => update,
         });
@@ -4198,6 +4205,21 @@ mod tests {
             assert_eq!(
                 cmd.as_deref(),
                 Some("'/Users/my name/.nvm/versions/node/v22/bin/codex' update || '/Users/my name/.nvm/versions/node/v22/bin/npm' i -g @openai/codex@latest")
+            );
+        }
+
+        #[test]
+        fn codex_system_install_falls_back_to_npm() {
+            // codex 装在 system/未知来源（无同级 brew/volta/npm）时，不能只剩裸
+            // `codex update`（其 self-update 可能 panic）——必须保留静态 npm 兜底。
+            let cmd = anchored_command_from_paths(
+                "codex",
+                "/usr/local/bin/codex",
+                "/usr/local/bin/codex",
+            );
+            assert_eq!(
+                cmd.as_deref(),
+                Some("/usr/local/bin/codex update || npm i -g @openai/codex@latest")
             );
         }
 

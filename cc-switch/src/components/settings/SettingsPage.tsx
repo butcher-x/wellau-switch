@@ -59,6 +59,7 @@ import {
 } from "@wellau/settings/visibility";
 import { WellauAccountSection } from "@wellau/ui/WellauAccountSection";
 import { WellauInstallSection } from "@wellau/ui/WellauInstallSection";
+import { WellauUpdateSection } from "@wellau/ui/WellauUpdateSection";
 
 interface SettingsDialogProps {
   open: boolean;
@@ -271,6 +272,9 @@ export function SettingsPage({
                     )}
                     {isGeneralSectionVisible("wellauInstall") && (
                       <WellauInstallSection />
+                    )}
+                    {isGeneralSectionVisible("wellauUpdate") && (
+                      <WellauUpdateSection />
                     )}
                     {isGeneralSectionVisible("language") && (
                       <LanguageSettings

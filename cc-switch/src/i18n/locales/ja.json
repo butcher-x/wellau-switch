@@ -843,6 +843,17 @@
         "upgraded": "{{name}} を更新しました"
       }
     },
+    "update": {
+      "title": "ソフトウェア更新",
+      "subtitle": "最新バージョンを確認してインストール",
+      "current": "現在のバージョン v{{version}}",
+      "available": "新しいバージョン v{{version}} が利用可能",
+      "upToDateHint": "最新の状態です",
+      "check": "更新を確認",
+      "checking": "確認中…",
+      "install": "今すぐ更新",
+      "installing": "更新中…"
+    },
     "envBadge": {
       "wsl": "WSL",
       "windows": "Win",

@@ -97,21 +97,50 @@ impl ProxyServer {
             return Err(ProxyError::AlreadyRunning);
         }
 
-        let addr: SocketAddr =
-            format!("{}:{}", self.config.listen_address, self.config.listen_port)
-                .parse()
-                .map_err(|e| ProxyError::BindFailed(format!("无效的地址: {e}")))?;
-
         // 创建关闭通道
         let (shutdown_tx, shutdown_rx) = oneshot::channel();
 
         // 构建路由
         let app = self.build_router();
 
-        // 绑定监听器
-        let listener = tokio::net::TcpListener::bind(&addr)
-            .await
-            .map_err(|e| ProxyError::BindFailed(e.to_string()))?;
+        // 绑定监听器：配置端口被占用时自动递增尝试下一个端口。
+        // 实际绑定到的端口经 actual_port 向下游(状态、系统代理、接管 URL)统一透传，
+        // 故改用其它端口不影响热切/接管行为。listen_port == 0 时交由 OS 自动分配。
+        const MAX_PORT_TRIES: u16 = 50;
+        let base_port = self.config.listen_port;
+        let mut listener: Option<tokio::net::TcpListener> = None;
+        let mut last_err = String::new();
+        for offset in 0..MAX_PORT_TRIES {
+            let try_port = base_port.saturating_add(offset);
+            let try_addr: SocketAddr =
+                format!("{}:{}", self.config.listen_address, try_port)
+                    .parse()
+                    .map_err(|e| ProxyError::BindFailed(format!("无效的地址: {e}")))?;
+            match tokio::net::TcpListener::bind(&try_addr).await {
+                Ok(l) => {
+                    if try_port != base_port {
+                        log::warn!(
+                            "[{}] 端口 {base_port} 被占用，已改用 {try_port}",
+                            log_srv::STARTED
+                        );
+                    }
+                    listener = Some(l);
+                    break;
+                }
+                // 仅端口占用时继续递增；listen_port == 0(OS 自动分配)不会触发此分支。
+                Err(e) if e.kind() == std::io::ErrorKind::AddrInUse && base_port != 0 => {
+                    last_err = e.to_string();
+                    continue;
+                }
+                Err(e) => return Err(ProxyError::BindFailed(e.to_string())),
+            }
+        }
+        let listener = listener.ok_or_else(|| {
+            ProxyError::BindFailed(format!(
+                "端口 {base_port}~{} 均被占用: {last_err}",
+                base_port.saturating_add(MAX_PORT_TRIES - 1)
+            ))
+        })?;
         let local_addr = listener
             .local_addr()
             .map_err(|e| ProxyError::BindFailed(e.to_string()))?;

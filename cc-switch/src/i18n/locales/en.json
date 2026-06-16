@@ -843,6 +843,17 @@
         "upgraded": "{{name}} upgraded"
       }
     },
+    "update": {
+      "title": "Software Update",
+      "subtitle": "Check for and install the latest version",
+      "current": "Current version v{{version}}",
+      "available": "New version v{{version}} available",
+      "upToDateHint": "You're up to date",
+      "check": "Check for Updates",
+      "checking": "Checking…",
+      "install": "Update Now",
+      "installing": "Updating…"
+    },
     "envBadge": {
       "wsl": "WSL",
       "windows": "Win",

@@ -18,6 +18,7 @@ export type SettingsTabId =
 export type GeneralSectionId =
   | "wellauAccount"
   | "wellauInstall"
+  | "wellauUpdate"
   | "language"
   | "theme"
   | "appVisibility"
@@ -53,6 +54,7 @@ export const wellauSettingsVisibility: WellauSettingsVisibility = {
   generalSections: {
     wellauAccount: true,
     wellauInstall: true,
+    wellauUpdate: true,
     language: true,
     theme: true,
     appVisibility: false,

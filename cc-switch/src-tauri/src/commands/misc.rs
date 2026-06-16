@@ -239,26 +239,97 @@ fn login_shell_path() -> Option<String> {
     }
 }
 
+/// 把登录 shell 的 PATH 合并进当前 PATH（登录优先），用于安装/更新子进程。
+#[cfg(not(target_os = "windows"))]
+fn merged_lifecycle_path() -> Option<String> {
+    let login_path = login_shell_path()?;
+    Some(match std::env::var("PATH") {
+        Ok(cur) if !cur.is_empty() => format!("{login_path}:{cur}"),
+        _ => login_path,
+    })
+}
+
+/// 判断错误详情是否为「无写权限」类（root 拥有的全局 npm 前缀等）。
+#[cfg(target_os = "macos")]
+fn looks_like_permission_error(msg: &str) -> bool {
+    let m = msg.to_ascii_lowercase();
+    m.contains("eacces")
+        || m.contains("operation not permitted")
+        || m.contains("operation was rejected by your operating system")
+        || m.contains("do not have the permissions")
+        || m.contains("permission denied")
+}
+
+/// macOS：用原生授权弹窗（osascript administrator privileges）以 root 重跑安装脚本。
+///
+/// 当 Node 由 `.pkg` 装到 `/usr/local`（root 拥有）时，`npm i -g` 写全局
+/// `node_modules` 会 `EACCES`。与安装 Node 同样的策略：弹系统授权框，授权后以 root
+/// 执行。root shell 的 PATH 极简，故把登录 shell 的 PATH 显式 export 进脚本，确保
+/// node/npm 可见。
+#[cfg(target_os = "macos")]
+fn run_lifecycle_with_admin(command_line: &str, merged_path: Option<&str>) -> Result<(), String> {
+    use std::io::Write;
+    use std::process::Command;
+
+    let mut script = String::from("#!/bin/bash\n");
+    if let Some(p) = merged_path {
+        let esc = p.replace('\'', "'\\''");
+        script.push_str(&format!("export PATH='{esc}'\n"));
+    }
+    script.push_str(command_line);
+    script.push('\n');
+
+    let script_path =
+        std::env::temp_dir().join(format!("cc_switch_admin_{}.sh", std::process::id()));
+    std::fs::File::create(&script_path)
+        .and_then(|mut f| f.write_all(script.as_bytes()))
+        .map_err(|e| format!("写入提权脚本失败: {e}"))?;
+
+    let path_for_apple = script_path
+        .to_string_lossy()
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"");
+    let apple = format!(
+        "do shell script \"/bin/bash \\\"{path_for_apple}\\\"\" with administrator privileges"
+    );
+    let out = Command::new("osascript").args(["-e", &apple]).output();
+    let _ = std::fs::remove_file(&script_path);
+
+    match out {
+        Ok(o) if o.status.success() => Ok(()),
+        Ok(o) => finish_lifecycle_output(&o),
+        Err(e) => Err(format!("授权执行失败: {e}")),
+    }
+}
+
 #[cfg(not(target_os = "windows"))]
 fn run_tool_lifecycle_silently(command_line: &str, _label: &str) -> Result<(), String> {
     use std::process::Command;
     // command_line 是 bash 风格脚本（含 `set -e` 与多行命令）；强制用 bash 执行，
     // 避免用户默认 shell 为 fish/zsh 时 `set -e` 等语义不一致。
+    let merged_path = merged_lifecycle_path();
     let mut cmd = Command::new("bash");
     cmd.arg("-c").arg(command_line);
     // 用登录 shell 的 PATH 覆盖子进程 PATH，确保 node/npm 可见（见 login_shell_path）。
-    // 合并当前 PATH 作兜底，避免登录 shell 缺失系统目录。
-    if let Some(login_path) = login_shell_path() {
-        let merged = match std::env::var("PATH") {
-            Ok(cur) if !cur.is_empty() => format!("{login_path}:{cur}"),
-            _ => login_path,
-        };
-        cmd.env("PATH", merged);
+    if let Some(ref p) = merged_path {
+        cmd.env("PATH", p);
     }
     let output = cmd
         .output()
         .map_err(|e| format!("启动安装进程失败: {e}"))?;
-    finish_lifecycle_output(&output)
+
+    match finish_lifecycle_output(&output) {
+        Ok(()) => Ok(()),
+        Err(detail) => {
+            // macOS：全局 npm 前缀属 root 时 `npm i -g` 会因权限失败；弹原生授权框以
+            // root 重试一次（与安装 Node 同一策略）。
+            #[cfg(target_os = "macos")]
+            if looks_like_permission_error(&detail) {
+                return run_lifecycle_with_admin(command_line, merged_path.as_deref());
+            }
+            Err(detail)
+        }
+    }
 }
 
 /// Windows 静默执行：command_line 是 .bat 内容（@echo off + call/wsl 行，CRLF 分隔），

@@ -2122,7 +2122,10 @@ fn anchored_official_update_command(tool: &str, bin_path: &str) -> Option<String
 fn prefers_official_update(tool: &str, shell: LifecycleCommandShell) -> bool {
     match shell {
         LifecycleCommandShell::Posix => {
-            matches!(tool, "claude" | "codex" | "opencode" | "openclaw")
+            // codex 刻意不在此列：它的 `codex update` 自升级在部分 release 会 panic /
+            // 空跑，已多次踩坑。codex 经 npm 分发，统一走 package_manager 锚定的确定性
+            // npm 安装（含 ~/.local/bin 独立安装的 `--force --prefix` 覆盖）。
+            matches!(tool, "claude" | "opencode" | "openclaw")
         }
         LifecycleCommandShell::WindowsBatch => {
             matches!(
@@ -2162,9 +2165,24 @@ fn package_manager_anchored_command_from_paths(
         }
         // 自带同级 npm 的 node 管理器：落到下面锚定到那处的 npm。
         "nvm" | "fnm" | "mise" | "homebrew" => {}
-        // system / 未知来源通常没有同级 npm，不能拼 `<dir>/npm`。若工具有官方
-        // self-update，上层会直接锚到 CLI 自身；否则返回 None 走静态兜底。
-        _ => return None,
+        // system / 未知来源通常没有同级 npm，不能拼 `<dir>/npm`。
+        //
+        // codex 例外：它主要经 npm 分发，且常被独立安装器丢在 `~/.local/bin/codex`
+        // （报 0.0.0、非 npm 创建）。若符合 npm 全局布局 `<prefix>/bin/codex`，
+        // 用 `npm i -g --force --prefix <prefix>` 把最新版锚回**命令行实际命中的
+        // 那处**并强制覆盖那个独立二进制（否则 npm 拒覆盖非己文件 → EEXIST）。
+        // 这样 codex 升级永远是一条确定的 npm 安装，不依赖会崩的 `codex update`。
+        _ => {
+            if tool == "codex" {
+                if let Some(prefix) = derive_npm_prefix(bin_path) {
+                    return Some(format!(
+                        "npm i -g --force --prefix {} {pkg}@latest",
+                        quote_path_if_spaced(&prefix)
+                    ));
+                }
+            }
+            return None;
+        }
     }
     let npm = sibling_bin(bin_path, "npm")?;
     Some(format!("{} i -g {pkg}@latest", quote_path_if_spaced(&npm)))
@@ -2193,9 +2211,11 @@ fn package_manager_anchored_command_from_paths(
 ///    且在 PATH 里比 nvm/homebrew 更靠前,用 npm 升级会装到别处且被原生那份遮蔽。
 /// ③ Homebrew formula（真身在 `Cellar/<formula>/`）→ `<bin_path 同目录>/brew upgrade <formula>`;
 ///    formula 由 Homebrew 拥有,避免 self-update 尝试改动包管理器管理的安装。
-/// ④ 其余支持官方自升级的工具 → `<bin_path 绝对> update/upgrade || <原锚定包管理器命令>`；
-///    Codex 的 self-update 只在部分 release 可用,所以保留 npm/brew/bun/volta fallback。
-/// ⑤ 不支持官方自升级的 npm 全局包(例如 Gemini CLI) → 锚定到"那处 bin 目录的 npm"。
+/// ④ 其余支持官方自升级的工具(claude/opencode/openclaw) → `<bin_path 绝对>
+///    update/upgrade || <原锚定包管理器命令>`；它们的 self-update 可靠。
+/// ⑤ 不走官方自升级的 npm 全局包(Gemini CLI、**Codex**) → 锚定到"那处 bin 目录的
+///    npm"；codex 还覆盖独立安装(`~/.local/bin/codex`)→ `npm i -g --force --prefix`。
+///    codex 刻意不用 `codex update`(部分 release 会 panic/空跑)。
 #[cfg(not(target_os = "windows"))]
 fn anchored_command_from_paths(tool: &str, bin_path: &str, real_target: &str) -> Option<String> {
     let real_lower = real_target.to_ascii_lowercase();
@@ -2215,32 +2235,10 @@ fn anchored_command_from_paths(tool: &str, bin_path: &str, real_target: &str) ->
     }
     if prefers_official_update(tool, LifecycleCommandShell::Posix) {
         let update = anchored_official_update_command(tool, bin_path)?;
-        // Codex 的 self-update 只在部分 release 可用，失败会抛 Rust 回溯；它主要经 npm
-        // 分发，故锚定不到同级包管理器（装在 system/未知来源）时，仍退回静态
-        // `npm i -g @openai/codex@latest` 作兜底，避免只剩会 panic 的裸 `codex update`。
-        // bare `npm` 依赖 PATH，已由 run_tool_lifecycle_silently 注入登录 shell 的 PATH。
-        // claude/opencode/openclaw 的原生自升级可靠，保持无包兜底的既有行为。
-        let fallback = package_command.or_else(|| {
-            (tool == "codex").then(|| {
-                // codex 常装在 system/未知来源（无同级 npm），如 ~/.local/bin/codex
-                // （独立安装、报 0.0.0）。裸 `npm i -g` 会装到**默认全局前缀**而非这处
-                // → 新版被 PATH 上这个旧 bin 永久遮蔽（升级后仍 0.0.0、永远显示可升级）。
-                // 若 bin 处于 `<prefix>/bin/codex` 标准布局，用 `--prefix <prefix>`
-                // 把 0.140.0 锚回命令行实际命中的那处；否则退回裸 npm。
-                //
-                // `--force`：独立安装器在 `<prefix>/bin/codex` 放的是它自己的二进制
-                // （非 npm 创建），npm 默认拒绝覆盖"别家文件"→ `EEXIST: file already
-                // exists`。这里就是要让 npm 接管这个位置，故强制覆盖。
-                match derive_npm_prefix(bin_path) {
-                    Some(prefix) => format!(
-                        "npm i -g --force --prefix {} @openai/codex@latest",
-                        quote_path_if_spaced(&prefix)
-                    ),
-                    None => "npm i -g @openai/codex@latest".to_string(),
-                }
-            })
-        });
-        return Some(match fallback {
+        // claude/opencode/openclaw 的原生自升级可靠：有同级包管理器就接一个 fallback，
+        // 否则只用 self-update。codex 已从此列移除——它统一走下面 package_command 的
+        // 确定性 npm 锚定（含 ~/.local 独立安装的 `--force --prefix` 覆盖）。
+        return Some(match package_command {
             Some(fallback) => chain_update_commands(update, fallback, LifecycleCommandShell::Posix),
             None => update,
         });
@@ -4168,8 +4166,8 @@ mod tests {
 
         #[test]
         fn codex_nvm_anchors_to_that_npm() {
-            // Codex 官方 self-update 只在支持的 release 上生效;失败时仍写回同一个
-            // node 的 npm，而非 PATH 第一个 npm。
+            // codex 不用 `codex update`（部分 release 会 panic）：直接锚定到这个
+            // node 的 npm，写回同一处，而非 PATH 第一个 npm。
             let cmd = anchored_command_from_paths(
                 "codex",
                 "/Users/me/.nvm/versions/node/v22.14.0/bin/codex",
@@ -4177,7 +4175,7 @@ mod tests {
             );
             assert_eq!(
                 cmd.as_deref(),
-                Some("/Users/me/.nvm/versions/node/v22.14.0/bin/codex update || /Users/me/.nvm/versions/node/v22.14.0/bin/npm i -g @openai/codex@latest")
+                Some("/Users/me/.nvm/versions/node/v22.14.0/bin/npm i -g @openai/codex@latest")
             );
         }
 
@@ -4207,7 +4205,7 @@ mod tests {
             );
             assert_eq!(
                 cmd.as_deref(),
-                Some("/Users/me/.volta/bin/codex update || /Users/me/.volta/bin/volta install @openai/codex")
+                Some("/Users/me/.volta/bin/volta install @openai/codex")
             );
         }
 
@@ -4235,7 +4233,7 @@ mod tests {
             );
             assert_eq!(
                 cmd.as_deref(),
-                Some("'/Users/my name/.volta/bin/codex' update || '/Users/my name/.volta/bin/volta' install @openai/codex")
+                Some("'/Users/my name/.volta/bin/volta' install @openai/codex")
             );
         }
 
@@ -4303,7 +4301,7 @@ mod tests {
             assert_eq!(
                 cmd.as_deref(),
                 Some(
-                    "/Users/me/.local/share/fnm_multishells/12345_abc/bin/codex update || /Users/me/.local/share/fnm_multishells/12345_abc/bin/npm i -g @openai/codex@latest"
+                    "/Users/me/.local/share/fnm_multishells/12345_abc/bin/npm i -g @openai/codex@latest"
                 )
             );
         }
@@ -4317,7 +4315,7 @@ mod tests {
             );
             assert_eq!(
                 cmd.as_deref(),
-                Some("'/Users/my name/.nvm/versions/node/v22/bin/codex' update || '/Users/my name/.nvm/versions/node/v22/bin/npm' i -g @openai/codex@latest")
+                Some("'/Users/my name/.nvm/versions/node/v22/bin/npm' i -g @openai/codex@latest")
             );
         }
 
@@ -4333,7 +4331,7 @@ mod tests {
             );
             assert_eq!(
                 cmd.as_deref(),
-                Some("/usr/local/bin/codex update || npm i -g --force --prefix /usr/local @openai/codex@latest")
+                Some("npm i -g --force --prefix /usr/local @openai/codex@latest")
             );
         }
 
@@ -4349,7 +4347,7 @@ mod tests {
             );
             assert_eq!(
                 cmd.as_deref(),
-                Some("/Users/dexter/.local/bin/codex update || npm i -g --force --prefix /Users/dexter/.local @openai/codex@latest")
+                Some("npm i -g --force --prefix /Users/dexter/.local @openai/codex@latest")
             );
         }
 
@@ -4571,10 +4569,12 @@ mod tests {
                 static_fallback_command("claude"),
                 "claude update || npm i -g @anthropic-ai/claude-code@latest"
             );
+            // codex 刻意不自升级（`codex update` 部分 release 会 panic）：静态兜底也只用 npm。
             assert_eq!(
                 static_fallback_command("codex"),
-                "codex update || npm i -g @openai/codex@latest"
+                "npm i -g @openai/codex@latest"
             );
+            assert!(!static_fallback_command("codex").contains("codex update"));
             assert_eq!(
                 static_fallback_command("gemini"),
                 "npm i -g @google/gemini-cli@latest"

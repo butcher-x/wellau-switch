@@ -852,7 +852,10 @@
       "check": "Check for Updates",
       "checking": "Checking…",
       "install": "Update Now",
-      "installing": "Updating…"
+      "installing": "Updating…",
+      "promptTitle": "Update Available",
+      "promptDesc": "Version v{{version}} is available (current v{{current}}). Update now?",
+      "later": "Later"
     },
     "envBadge": {
       "wsl": "WSL",

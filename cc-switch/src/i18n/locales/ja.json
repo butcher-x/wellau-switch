@@ -852,7 +852,10 @@
       "check": "更新を確認",
       "checking": "確認中…",
       "install": "今すぐ更新",
-      "installing": "更新中…"
+      "installing": "更新中…",
+      "promptTitle": "新しいバージョン",
+      "promptDesc": "バージョン v{{version}} が利用可能です（現在 v{{current}}）。今すぐ更新しますか？",
+      "later": "後で"
     },
     "envBadge": {
       "wsl": "WSL",

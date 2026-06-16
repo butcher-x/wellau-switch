@@ -2085,6 +2085,30 @@ fn sibling_bin(bin_path: &str, exe: &str) -> Option<String> {
     }
 }
 
+/// 若 bin 路径形如 `<prefix>/bin/<tool>`，返回 `<prefix>`，供 `npm i -g --prefix`
+/// 把全局包锚回命令行实际命中的那处。覆盖 system/未知来源但符合 npm 全局布局的
+/// 安装（如 `~/.local/bin/codex`、`/usr/local/bin/codex`）：这类没有同级 npm，
+/// 裸 `npm i -g` 会装到**默认全局前缀**而非这里 → 新版被 PATH 上这个旧 bin
+/// 永久遮蔽（典型症状：codex 报 0.0.0，升级后仍 0.0.0、永远显示可升级）。
+/// 末段非 `bin` 或无上级目录 → None，让上游退回静态兜底。
+#[cfg(not(target_os = "windows"))]
+fn derive_npm_prefix(bin_path: &str) -> Option<String> {
+    let bin_dir = parent_dir(bin_path);
+    if bin_dir.is_empty() {
+        return None;
+    }
+    let last = bin_dir.rsplit(['/', '\\']).next().unwrap_or("");
+    if !last.eq_ignore_ascii_case("bin") {
+        return None;
+    }
+    let prefix = parent_dir(&bin_dir);
+    if prefix.is_empty() {
+        None
+    } else {
+        Some(prefix)
+    }
+}
+
 #[cfg(not(target_os = "windows"))]
 fn anchored_official_update_command(tool: &str, bin_path: &str) -> Option<String> {
     official_update_args(tool).map(|args| format!("{} {args}", quote_path_if_spaced(bin_path)))
@@ -2196,8 +2220,22 @@ fn anchored_command_from_paths(tool: &str, bin_path: &str, real_target: &str) ->
         // `npm i -g @openai/codex@latest` 作兜底，避免只剩会 panic 的裸 `codex update`。
         // bare `npm` 依赖 PATH，已由 run_tool_lifecycle_silently 注入登录 shell 的 PATH。
         // claude/opencode/openclaw 的原生自升级可靠，保持无包兜底的既有行为。
-        let fallback = package_command
-            .or_else(|| (tool == "codex").then(|| "npm i -g @openai/codex@latest".to_string()));
+        let fallback = package_command.or_else(|| {
+            (tool == "codex").then(|| {
+                // codex 常装在 system/未知来源（无同级 npm），如 ~/.local/bin/codex
+                // （独立安装、报 0.0.0）。裸 `npm i -g` 会装到**默认全局前缀**而非这处
+                // → 新版被 PATH 上这个旧 bin 永久遮蔽（升级后仍 0.0.0、永远显示可升级）。
+                // 若 bin 处于 `<prefix>/bin/codex` 标准布局，用 `--prefix <prefix>`
+                // 把 0.140.0 锚回命令行实际命中的那处；否则退回裸 npm。
+                match derive_npm_prefix(bin_path) {
+                    Some(prefix) => format!(
+                        "npm i -g --prefix {} @openai/codex@latest",
+                        quote_path_if_spaced(&prefix)
+                    ),
+                    None => "npm i -g @openai/codex@latest".to_string(),
+                }
+            })
+        });
         return Some(match fallback {
             Some(fallback) => chain_update_commands(update, fallback, LifecycleCommandShell::Posix),
             None => update,
@@ -4280,9 +4318,10 @@ mod tests {
         }
 
         #[test]
-        fn codex_system_install_falls_back_to_npm() {
-            // codex 装在 system/未知来源（无同级 brew/volta/npm）时，不能只剩裸
-            // `codex update`（其 self-update 可能 panic）——必须保留静态 npm 兜底。
+        fn codex_system_install_falls_back_to_prefixed_npm() {
+            // codex 装在 system/未知来源（无同级 brew/volta/npm）但符合 npm 全局布局
+            // `<prefix>/bin/codex` 时，npm 兜底须带 `--prefix <prefix>`，把新版装回
+            // 命令行实际命中的那处；否则裸 `npm i -g` 装到默认前缀，旧 bin 遮蔽新版。
             let cmd = anchored_command_from_paths(
                 "codex",
                 "/usr/local/bin/codex",
@@ -4290,7 +4329,23 @@ mod tests {
             );
             assert_eq!(
                 cmd.as_deref(),
-                Some("/usr/local/bin/codex update || npm i -g @openai/codex@latest")
+                Some("/usr/local/bin/codex update || npm i -g --prefix /usr/local @openai/codex@latest")
+            );
+        }
+
+        #[test]
+        fn codex_local_bin_install_anchors_prefix_to_local() {
+            // ~/.local/bin/codex（独立安装、报 0.0.0）：必须 `--prefix ~/.local`
+            // 把 0.140.0 装回 ~/.local/bin，覆盖那个旧 codex；裸 npm 会装到别处、
+            // 被这个旧 bin 永久遮蔽（升级后仍 0.0.0）。
+            let cmd = anchored_command_from_paths(
+                "codex",
+                "/Users/dexter/.local/bin/codex",
+                "/Users/dexter/.local/bin/codex",
+            );
+            assert_eq!(
+                cmd.as_deref(),
+                Some("/Users/dexter/.local/bin/codex update || npm i -g --prefix /Users/dexter/.local @openai/codex@latest")
             );
         }
 

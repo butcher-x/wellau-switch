@@ -2227,9 +2227,13 @@ fn anchored_command_from_paths(tool: &str, bin_path: &str, real_target: &str) ->
                 // → 新版被 PATH 上这个旧 bin 永久遮蔽（升级后仍 0.0.0、永远显示可升级）。
                 // 若 bin 处于 `<prefix>/bin/codex` 标准布局，用 `--prefix <prefix>`
                 // 把 0.140.0 锚回命令行实际命中的那处；否则退回裸 npm。
+                //
+                // `--force`：独立安装器在 `<prefix>/bin/codex` 放的是它自己的二进制
+                // （非 npm 创建），npm 默认拒绝覆盖"别家文件"→ `EEXIST: file already
+                // exists`。这里就是要让 npm 接管这个位置，故强制覆盖。
                 match derive_npm_prefix(bin_path) {
                     Some(prefix) => format!(
-                        "npm i -g --prefix {} @openai/codex@latest",
+                        "npm i -g --force --prefix {} @openai/codex@latest",
                         quote_path_if_spaced(&prefix)
                     ),
                     None => "npm i -g @openai/codex@latest".to_string(),
@@ -4329,7 +4333,7 @@ mod tests {
             );
             assert_eq!(
                 cmd.as_deref(),
-                Some("/usr/local/bin/codex update || npm i -g --prefix /usr/local @openai/codex@latest")
+                Some("/usr/local/bin/codex update || npm i -g --force --prefix /usr/local @openai/codex@latest")
             );
         }
 
@@ -4345,7 +4349,7 @@ mod tests {
             );
             assert_eq!(
                 cmd.as_deref(),
-                Some("/Users/dexter/.local/bin/codex update || npm i -g --prefix /Users/dexter/.local @openai/codex@latest")
+                Some("/Users/dexter/.local/bin/codex update || npm i -g --force --prefix /Users/dexter/.local @openai/codex@latest")
             );
         }
 

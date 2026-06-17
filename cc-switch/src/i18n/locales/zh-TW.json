@@ -275,11 +275,6 @@
       "message": "本地路由是一項進階功能，啟用前請確保您已了解其運作原理。\n\n建議先查閱相關文件或諮詢您的供應商，以取得正確的設定方式。",
       "confirm": "我已了解，繼續啟用"
     },
-    "failover": {
-      "title": "啟用故障轉移功能",
-      "message": "故障轉移是一項進階功能，啟用前請確保您已了解其運作原理。\n\n建議先在故障轉移佇列中設定好供應商優先順序。",
-      "confirm": "我已了解，繼續啟用"
-    },
     "unifyCodexHistory": {
       "title": "統一 Codex 會話歷史",
       "message": "開啟後，官方訂閱與第三方將共用同一個會話歷史清單。注意：跨供應商繼續舊會話時，可能因對方後端無法解密 encrypted_content 推理內容而失敗。\n\n可選擇同時把現有官方會話歷史遷入共享清單（遷移前自動備份到 ~/.cc-switch/backups，關閉開關時可選擇恢復）。",
@@ -337,8 +332,6 @@
         "description": "控制路由服務開關、查看狀態與連接埠資訊",
         "enableFeature": "在主頁面顯示本地路由開關",
         "enableFeatureDescription": "開啟後，主頁面頂部將顯示路由和故障轉移開關",
-        "enableFailoverToggle": "在主頁面顯示故障轉移開關",
-        "enableFailoverToggleDescription": "開啟後，主頁面頂部將獨立顯示故障轉移開關",
         "running": "執行中",
         "stopped": "已停止"
       },
@@ -807,7 +800,8 @@
       },
       "action": {
         "install": "安裝",
-        "upgrade": "升級 {{from}} → {{to}}"
+        "upgrade": "升級 {{from}} → {{to}}",
+        "update": "可更新"
       },
       "toast": {
         "installed": "{{name}} 安裝完成",

@@ -275,11 +275,6 @@
       "message": "Local routing is an advanced feature. Please make sure you understand how it works before enabling.\n\nWe recommend consulting the relevant documentation or your provider for proper configuration.",
       "confirm": "I understand, enable"
     },
-    "failover": {
-      "title": "Enable Failover",
-      "message": "Failover is an advanced feature. Please make sure you understand how it works before enabling.\n\nWe recommend configuring provider priorities in the failover queue first.",
-      "confirm": "I understand, enable"
-    },
     "unifyCodexHistory": {
       "title": "Unified Codex session history",
       "message": "When enabled, the official subscription and third-party providers share one session history list. Note: resuming an old session across providers may fail because its encrypted_content reasoning cannot be decrypted by another backend.\n\nYou can also migrate your existing official session history into the shared list (originals are backed up to ~/.cc-switch/backups first and can be restored when you turn this off).",
@@ -337,8 +332,6 @@
         "description": "Control routing service toggle, view status and port info",
         "enableFeature": "Show Routing Toggle on Main Page",
         "enableFeatureDescription": "When enabled, the routing and failover toggles will appear at the top of the main page",
-        "enableFailoverToggle": "Show Failover Toggle on Main Page",
-        "enableFailoverToggleDescription": "When enabled, the failover toggle will appear independently at the top of the main page",
         "running": "Running",
         "stopped": "Stopped"
       },
@@ -836,7 +829,8 @@
       },
       "action": {
         "install": "Install",
-        "upgrade": "Update {{from}} → {{to}}"
+        "upgrade": "Update {{from}} → {{to}}",
+        "update": "Update available"
       },
       "toast": {
         "installed": "{{name}} installed",

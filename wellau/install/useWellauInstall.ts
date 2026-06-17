@@ -39,6 +39,8 @@ export interface TargetState {
   version: string | null;
   latest: string | null;
   upgradable: boolean;
+  /** 正在联网检测远端最新版（仅 CLI）：UI 据此在该项显示转圈。 */
+  checkingLatest: boolean;
   status: StepStatus;
   progress: number | null;
   error: string | null;
@@ -58,6 +60,7 @@ function initialTargets(): TargetState[] {
     version: null,
     latest: null,
     upgradable: false,
+    checkingLatest: false,
     status: "idle",
     progress: null,
     error: null,
@@ -93,6 +96,13 @@ export function useWellauInstall() {
   /** 探测各项已安装状态（本地扫描，不联网）。 */
   const detect = useCallback(async () => {
     setDetecting(true);
+    // CLI 项先进入「检测远端中」：本地探测出已安装会立即显示，远端最新版查到前
+    // 该项持续转圈（避免「先已安装、3 秒后突然变可升级」的跳变）。
+    setTargets((prev) =>
+      prev.map((t) =>
+        META_BY_ID.get(t.id)!.kind === "cli" ? { ...t, checkingLatest: true } : t,
+      ),
+    );
 
     // CLI：probe_tool_installations 纯本地扫描，避免联网查 npm 最新版卡住。
     try {
@@ -145,11 +155,22 @@ export function useWellauInstall() {
           if (meta.kind !== "cli") return t;
           const v = versions.find((x) => x.name === meta.tool);
           const latest = v?.latest_version ?? null;
-          return { ...t, latest, upgradable: isUpdateAvailable(t.version, latest) };
+          return {
+            ...t,
+            latest,
+            upgradable: isUpdateAvailable(t.version, latest),
+            checkingLatest: false,
+          };
         }),
       );
     } catch (e) {
       console.error("[WellauInstall] 获取最新版本失败", e);
+      // 检测失败也要停转圈，回落到静态「已安装」。
+      setTargets((prev) =>
+        prev.map((t) =>
+          META_BY_ID.get(t.id)!.kind === "cli" ? { ...t, checkingLatest: false } : t,
+        ),
+      );
     }
   }, []);
 

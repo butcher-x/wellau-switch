@@ -164,17 +164,16 @@ pub async fn get_tool_versions(
     } else {
         VALID_TOOLS.to_vec()
     };
-    let mut results = Vec::new();
-
-    for tool in requested {
+    // 各工具并行查询：网络拉取最新版（npm/GitHub/PyPI）是主要耗时，串行会随工具
+    // 数量线性叠加。join_all 让多个请求并发在途，整体≈单个最慢请求的时延。
+    let queries = requested.into_iter().map(|tool| {
         let pref = wsl_shell_by_tool.as_ref().and_then(|m| m.get(tool));
         let tool_wsl_shell = pref.and_then(|p| p.wsl_shell.as_deref());
         let tool_wsl_shell_flag = pref.and_then(|p| p.wsl_shell_flag.as_deref());
+        get_single_tool_version_impl(tool, tool_wsl_shell, tool_wsl_shell_flag)
+    });
 
-        results.push(get_single_tool_version_impl(tool, tool_wsl_shell, tool_wsl_shell_flag).await);
-    }
-
-    Ok(results)
+    Ok(futures::future::join_all(queries).await)
 }
 
 #[tauri::command]
@@ -1003,13 +1002,22 @@ fn pick_latest_version(
     Some(best)
 }
 
+/// 版本检测请求的超时上限：全局 HTTP 客户端为代理长连接设了 600s 总超时，但「查最新版」
+/// 只是一次性小请求，必须独立设短超时——否则网络异常时设置页那一栏会长时间转圈。
+const VERSION_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
+
 /// 拉取 npm 包的完整 dist-tags(单次请求即含 latest/next/beta/...)。
 async fn fetch_npm_dist_tags(
     client: &reqwest::Client,
     package: &str,
 ) -> Option<serde_json::Map<String, serde_json::Value>> {
     let url = format!("https://registry.npmjs.org/{package}");
-    let resp = client.get(&url).send().await.ok()?;
+    let resp = client
+        .get(&url)
+        .timeout(VERSION_FETCH_TIMEOUT)
+        .send()
+        .await
+        .ok()?;
     let json = resp.json::<serde_json::Value>().await.ok()?;
     json.get("dist-tags")?.as_object().cloned()
 }
@@ -1033,6 +1041,7 @@ async fn fetch_github_latest_version(client: &reqwest::Client, repo: &str) -> Op
         .get(&url)
         .header("User-Agent", "cc-switch")
         .header("Accept", "application/vnd.github+json")
+        .timeout(VERSION_FETCH_TIMEOUT)
         .send()
         .await
     {
@@ -1052,7 +1061,7 @@ async fn fetch_github_latest_version(client: &reqwest::Client, repo: &str) -> Op
 /// Helper function to fetch latest version from PyPI
 async fn fetch_pypi_latest_version(client: &reqwest::Client, package: &str) -> Option<String> {
     let url = format!("https://pypi.org/pypi/{package}/json");
-    match client.get(&url).send().await {
+    match client.get(&url).timeout(VERSION_FETCH_TIMEOUT).send().await {
         Ok(resp) => {
             if let Ok(json) = resp.json::<serde_json::Value>().await {
                 json.get("info")

@@ -110,8 +110,16 @@ function ActionCell({
     );
   }
 
-  // 已安装且没有可升级 → 静态「已安装」。
+  // 已安装：远端最新版检测中 → 转圈占位（不抢先判定可升级）；检测完无新版 → 静态「已安装」。
   if (target.installed && !target.upgradable) {
+    if (target.checkingLatest) {
+      return (
+        <span className="flex shrink-0 items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
+          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          {t("settings.install.badge.installed", { defaultValue: "已安装" })}
+        </span>
+      );
+    }
     return (
       <span className="flex shrink-0 items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground">
         <Check className="h-3.5 w-3.5 text-green-500" />
@@ -120,15 +128,15 @@ function ActionCell({
     );
   }
 
-  // 可操作：升级（蓝色）或安装（主色）。
+  // 可操作：可更新（蓝色，点击即升级）或安装（主色）。
   const isUpgrade = target.installed && target.upgradable;
   const label = isUpgrade
-    ? t("settings.install.action.upgrade", {
-        from: target.version,
-        to: target.latest,
-        defaultValue: "升级 {{from}} → {{to}}",
-      })
+    ? t("settings.install.action.update", { defaultValue: "可更新" })
     : t("settings.install.action.install", { defaultValue: "安装" });
+  const upgradeHint =
+    isUpgrade && target.version && target.latest
+      ? `${target.version} → ${target.latest}`
+      : undefined;
 
   return (
     <button
@@ -138,7 +146,7 @@ function ActionCell({
       title={
         target.status === "error" && target.error
           ? target.error
-          : undefined
+          : upgradeHint
       }
       className={[
         "flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50",

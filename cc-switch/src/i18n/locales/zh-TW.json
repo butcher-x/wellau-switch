@@ -791,7 +791,7 @@
     "localEnvCheck": "本地環境檢查",
     "install": {
       "title": "環境安裝",
-      "subtitle": "點擊每項右側標籤即可單獨安裝或升級 Claude / Codex",
+      "subtitle": "claude下載需要使用全域代理",
       "running": "處理中…",
       "redetect": "重新偵測",
       "targets": {
@@ -811,9 +811,6 @@
       "toast": {
         "installed": "{{name}} 安裝完成",
         "upgraded": "{{name}} 已升級"
-      },
-      "hint": {
-        "claudeDesktopProxy": "提示：Claude 下載需走全域代理（設定 → 路由 → 全域出站代理）"
       }
     },
     "update": {

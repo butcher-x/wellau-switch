@@ -48,7 +48,7 @@ export function WellauInstallSection() {
           </h3>
           <p className="text-xs text-muted-foreground">
             {t("settings.install.subtitle", {
-              defaultValue: "点击每项右侧标签即可单独安装或升级 Claude / Codex",
+              defaultValue: "claude下载需要使用全局代理",
             })}
           </p>
         </div>
@@ -73,14 +73,6 @@ export function WellauInstallSection() {
             >
               <div className="min-w-0 flex-1">
                 <span className="block truncate text-sm">{nameOf(target)}</span>
-                {target.id === "claude-desktop" && !target.installed && (
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {t("settings.install.hint.claudeDesktopProxy", {
-                      defaultValue:
-                        "提示：Claude 下载需走全局代理（设置 → 路由 → 全局出站代理）",
-                    })}
-                  </p>
-                )}
               </div>
               <ActionCell
                 target={target}

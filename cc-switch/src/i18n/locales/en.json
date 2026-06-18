@@ -820,7 +820,7 @@
     "toolUpgradeUnanchoredHint": "Can't determine which install your command line uses; will run the default upgrade command (may install to the first npm on PATH).",
     "install": {
       "title": "Environment Setup",
-      "subtitle": "Click the label on each item to install or upgrade Claude / Codex individually",
+      "subtitle": "Claude download requires global proxy",
       "running": "Working…",
       "redetect": "Re-detect",
       "targets": {
@@ -840,9 +840,6 @@
       "toast": {
         "installed": "{{name}} installed",
         "upgraded": "{{name}} upgraded"
-      },
-      "hint": {
-        "claudeDesktopProxy": "Tip: Claude download requires the global outbound proxy (Settings → Routing → Global Outbound Proxy)"
       }
     },
     "update": {

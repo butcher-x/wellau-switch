@@ -263,11 +263,16 @@ function App() {
     status: proxyStatus,
   } = useProxyStatus();
   const isCurrentAppTakeoverActive = takeoverStatus?.[activeApp] || false;
-  const activeProviderId = useMemo(() => {
-    const target = proxyStatus?.active_targets?.find(
-      (t) => t.app_type === activeApp,
-    );
-    return target?.provider_id;
+  // 当前应用下所有“最近活跃”的供应商 → provider_id -> 上次请求时间（epoch ms）。
+  // 后端已按活跃窗口剪除陈旧项，这里直接用于多渠道并行点亮绿框 + 显示上次请求时间。
+  const activeProviderActivity = useMemo(() => {
+    const map = new Map<string, number | null>();
+    for (const t of proxyStatus?.active_targets ?? []) {
+      if (t.app_type === activeApp) {
+        map.set(t.provider_id, t.last_request_at ?? null);
+      }
+    }
+    return map;
   }, [proxyStatus?.active_targets, activeApp]);
 
   const { data, isLoading, refetch } = useProvidersQuery(activeApp, {
@@ -1006,7 +1011,7 @@ function App() {
                       isProxyTakeover={
                         isProxyRunning && isCurrentAppTakeoverActive
                       }
-                      activeProviderId={activeProviderId}
+                      activeProviderActivity={activeProviderActivity}
                       onSwitch={switchProvider}
                       onEdit={(provider) => {
                         setEditingProvider(provider);

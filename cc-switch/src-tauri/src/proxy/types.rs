@@ -97,6 +97,55 @@ pub struct ActiveTarget {
     pub app_type: String, // "Claude" | "Codex" | "Gemini"
     pub provider_name: String,
     pub provider_id: String,
+    /// 该供应商最近一次被请求命中的时间（epoch 毫秒）。前端据此点亮绿框并显示
+    /// “上次请求时间”，并在空闲窗口后让绿框淡出。旧版本无此字段 → serde 默认 None。
+    #[serde(default)]
+    pub last_request_at: Option<i64>,
+}
+
+/// 单个供应商的活跃记录（UI 展示用）：记录最近一次被请求命中的时间。
+///
+/// 区别于 DB 的“当前供应商 / 健康状态”：本结构纯粹反映“代理刚把流量打到这一处”，
+/// 用于多渠道并行时各自点亮绿框。按 `(app_type -> provider_id -> ProviderActivity)`
+/// 组织，使同一应用可同时有多个活跃渠道。
+#[derive(Debug, Clone)]
+pub struct ProviderActivity {
+    pub provider_name: String,
+    pub last_request_at_ms: i64,
+}
+
+/// 活跃供应商映射：app_type -> (provider_id -> ProviderActivity)。
+pub type ActiveProviderMap =
+    std::collections::HashMap<String, std::collections::HashMap<String, ProviderActivity>>;
+
+/// 活跃窗口（毫秒）：超过此空闲时间未再被命中的供应商，会在 `get_status` 时被剪除，
+/// 使前端绿框自动淡出。60 秒兼顾“并行多渠道同时点亮”与“停手后及时熄灭”。
+pub const ACTIVE_WINDOW_MS: i64 = 60_000;
+
+/// 当前 epoch 毫秒（用于活跃记录时间戳；取不到时回退 0）。
+pub fn now_epoch_ms() -> i64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+/// 在活跃映射中标记某供应商“刚被请求命中”（upsert 当前时间戳）。
+/// 同一应用可同时存在多个活跃供应商（并行请求各自点亮）。
+pub fn mark_active(
+    map: &mut ActiveProviderMap,
+    app_type: &str,
+    provider_id: &str,
+    provider_name: &str,
+) {
+    map.entry(app_type.to_string()).or_default().insert(
+        provider_id.to_string(),
+        ProviderActivity {
+            provider_name: provider_name.to_string(),
+            last_request_at_ms: now_epoch_ms(),
+        },
+    );
 }
 
 /// 代理服务器信息

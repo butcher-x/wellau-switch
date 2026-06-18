@@ -128,6 +128,11 @@
     "editCodexProvider": "Edit Codex Provider",
     "configError": "Configuration Error",
     "notConfigured": "Not configured for official website",
+    "lastRequest": "Last request {{ago}}",
+    "lastRequestJustNow": "just now",
+    "lastRequestSeconds": "{{count}}s ago",
+    "lastRequestMinutes": "{{count}}m ago",
+    "lastRequestHours": "{{count}}h ago",
     "applyToClaudePlugin": "Apply to Claude plugin",
     "removeFromClaudePlugin": "Remove from Claude plugin",
     "dragToReorder": "Drag to reorder",
@@ -835,6 +840,9 @@
       "toast": {
         "installed": "{{name}} installed",
         "upgraded": "{{name}} upgraded"
+      },
+      "hint": {
+        "claudeDesktopProxy": "Tip: Claude download requires the global outbound proxy (Settings → Routing → Global Outbound Proxy)"
       }
     },
     "update": {

@@ -36,8 +36,10 @@ pub struct ProxyState {
     pub config: Arc<RwLock<ProxyConfig>>,
     pub status: Arc<RwLock<ProxyStatus>>,
     pub start_time: Arc<RwLock<Option<std::time::Instant>>>,
-    /// 每个应用类型当前使用的 provider (app_type -> (provider_id, provider_name))
-    pub current_providers: Arc<RwLock<std::collections::HashMap<String, (String, String)>>>,
+    /// 活跃供应商映射 (app_type -> provider_id -> ProviderActivity)。
+    /// 记录“代理最近把流量打到哪些供应商”，支持同一应用多渠道并行各自点亮绿框，
+    /// 并携带最近一次请求时间用于 UI 展示与空闲淡出。
+    pub current_providers: Arc<RwLock<ActiveProviderMap>>,
     /// 共享的 ProviderRouter（持有熔断器状态，跨请求保持）
     pub provider_router: Arc<ProviderRouter>,
     /// Gemini Native shadow state，用于 thoughtSignature / tool call 回放
@@ -75,7 +77,7 @@ impl ProxyServer {
             config: Arc::new(RwLock::new(config.clone())),
             status: Arc::new(RwLock::new(ProxyStatus::default())),
             start_time: Arc::new(RwLock::new(None)),
-            current_providers: Arc::new(RwLock::new(std::collections::HashMap::new())),
+            current_providers: Arc::new(RwLock::new(ActiveProviderMap::new())),
             provider_router,
             gemini_shadow: Arc::new(GeminiShadowStore::default()),
             codex_chat_history: Arc::new(CodexChatHistoryStore::default()),
@@ -291,30 +293,36 @@ impl ProxyServer {
             status.uptime_seconds = start.elapsed().as_secs();
         }
 
-        // 从 current_providers HashMap 获取每个应用类型当前正在使用的 provider
-        let current_providers = self.state.current_providers.read().await;
-        status.active_targets = current_providers
-            .iter()
-            .map(|(app_type, (provider_id, provider_name))| ActiveTarget {
-                app_type: app_type.clone(),
-                provider_id: provider_id.clone(),
-                provider_name: provider_name.clone(),
-            })
-            .collect();
+        // 从活跃映射构建 active_targets：先剪除超过活跃窗口的陈旧记录（绿框淡出），
+        // 再把每个 (app, provider) 各发一条携带时间戳的目标——支持同一应用多渠道并行点亮。
+        let cutoff = now_epoch_ms() - ACTIVE_WINDOW_MS;
+        let mut current_providers = self.state.current_providers.write().await;
+        let mut targets = Vec::new();
+        for (app_type, providers) in current_providers.iter_mut() {
+            providers.retain(|_, act| act.last_request_at_ms >= cutoff);
+            for (provider_id, act) in providers.iter() {
+                targets.push(ActiveTarget {
+                    app_type: app_type.clone(),
+                    provider_id: provider_id.clone(),
+                    provider_name: act.provider_name.clone(),
+                    last_request_at: Some(act.last_request_at_ms),
+                });
+            }
+        }
+        // 清掉已无活跃供应商的应用条目，避免映射无限增长。
+        current_providers.retain(|_, providers| !providers.is_empty());
+        status.active_targets = targets;
 
         status
     }
 
-    /// 更新某个应用类型当前“目标供应商”（用于 UI 展示 active_targets）
+    /// 标记某个应用类型“目标供应商”刚被命中（用于 UI 展示 active_targets）
     ///
-    /// 注意：这不代表该供应商一定已经处理过请求，而是用于“热切换/启用故障转移立即切 P1”
-    /// 等场景下，让 UI 能立刻反映最新目标。
+    /// 注意：这不代表该供应商一定已经成功处理请求，而是用于“热切换/启用故障转移立即切 P1”
+    /// 或“请求打到该渠道”等场景下，让 UI 立刻点亮对应绿框。
     pub async fn set_active_target(&self, app_type: &str, provider_id: &str, provider_name: &str) {
         let mut current_providers = self.state.current_providers.write().await;
-        current_providers.insert(
-            app_type.to_string(),
-            (provider_id.to_string(), provider_name.to_string()),
-        );
+        mark_active(&mut current_providers, app_type, provider_id, provider_name);
     }
 
     fn build_router(&self) -> Router {

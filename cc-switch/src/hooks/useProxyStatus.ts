@@ -24,8 +24,8 @@ export function useProxyStatus() {
   const { data: status, isLoading } = useQuery({
     queryKey: ["proxyStatus"],
     queryFn: () => invoke<ProxyStatus>("get_proxy_status"),
-    // 仅在服务运行时轮询
-    refetchInterval: (query) => (query.state.data?.running ? 2000 : false),
+    // 仅在服务运行时轮询；运行时用 1s 让多渠道绿框/上次请求时间更跟手。
+    refetchInterval: (query) => (query.state.data?.running ? 1000 : false),
     // 保持之前的数据，避免闪烁
     placeholderData: (previousData) => previousData,
   });

@@ -273,8 +273,10 @@ fn mac_mount_copy(dmg: &str, mount: &str, app_name: &str, target_dir: &str) -> R
         .args(["detach", mount, "-quiet"])
         .output();
 
+    // 不加 -quiet：挂载失败时（如下载到的不是有效 DMG）需要 hdiutil 的真实 stderr
+    // （"not a valid DMG" / "no mountable file systems"），否则只剩 "命令失败 exit 1"。
     let attach = Command::new("hdiutil")
-        .args(["attach", dmg, "-nobrowse", "-quiet", "-mountpoint", mount])
+        .args(["attach", dmg, "-nobrowse", "-mountpoint", mount])
         .output()
         .map_err(|e| format!("挂载镜像失败: {e}"))?;
     if !attach.status.success() {
@@ -304,10 +306,36 @@ fn mac_mount_copy(dmg: &str, mount: &str, app_name: &str, target_dir: &str) -> R
     result
 }
 
+/// 校验下载到的确实是 DMG：国内直连 claude.ai 常被拦截/限速，可能下到错误页或半截
+/// 文件，直接挂载只会得到难懂的 `hdiutil` exit 1。提前检查并给出可操作提示。
+fn validate_downloaded_dmg(path: &Path) -> Result<(), String> {
+    let len = std::fs::metadata(path)
+        .map_err(|e| format!("读取下载文件失败: {e}"))?
+        .len();
+    if len >= 1_000_000 {
+        return Ok(());
+    }
+    // 明显过小（正常 DMG 几十 MB）：多半是被拦截返回的网页或下载不完整。
+    let mut head = vec![0u8; 256];
+    if let Ok(mut f) = std::fs::File::open(path) {
+        use std::io::Read;
+        let n = f.read(&mut head).unwrap_or(0);
+        head.truncate(n);
+    }
+    let snippet = String::from_utf8_lossy(&head).to_ascii_lowercase();
+    if snippet.contains("<html") || snippet.contains("<!doctype") {
+        return Err("下载到的不是安装包（疑似被网络拦截返回了网页）。Claude 桌面版来自 claude.ai，国内可能无法直连——请在 设置 → 路由 → 全局出站代理 配置全局代理后重试。".to_string());
+    }
+    Err(format!(
+        "下载的安装包过小（{len} 字节），可能下载不完整或被网络拦截。Claude 桌面版来自 claude.ai，请在 设置 → 路由 → 全局出站代理 配置全局代理后重试。"
+    ))
+}
+
 async fn install_claude_mac(app: &AppHandle) -> Result<(), String> {
     let dmg = std::env::temp_dir().join("cc-switch-Claude-latest.dmg");
     emit_progress(app, "claude-desktop", "download", Some(0), "开始下载");
     download_with_progress(app, "claude-desktop", CLAUDE_MAC_DMG_URL, &dmg).await?;
+    validate_downloaded_dmg(&dmg)?;
 
     let target_dir = mac_user_apps_dir()?;
     emit_progress(app, "claude-desktop", "install", None, "安装到 ~/Applications");

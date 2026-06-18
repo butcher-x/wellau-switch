@@ -66,7 +66,7 @@ interface ProviderListProps {
   isLoading?: boolean;
   isProxyRunning?: boolean; // 代理服务运行状态
   isProxyTakeover?: boolean; // 代理接管模式（Live配置已被接管）
-  activeProviderId?: string; // 代理当前实际使用的供应商 ID（用于故障转移模式下标注绿色边框）
+  activeProviderActivity?: Map<string, number | null>; // provider_id -> 上次请求时间（用于点亮绿框+显示上次请求时间）
   onSetAsDefault?: (provider: Provider) => void; // OpenClaw: set as default model
 }
 
@@ -88,7 +88,7 @@ export function ProviderList({
   isLoading = false,
   isProxyRunning = false,
   isProxyTakeover = false,
-  activeProviderId,
+  activeProviderActivity,
   onSetAsDefault,
 }: ProviderListProps) {
   const { t } = useTranslation();
@@ -450,7 +450,7 @@ export function ProviderList({
                 onToggleFailover={(enabled) =>
                   handleToggleFailover(provider.id, enabled)
                 }
-                activeProviderId={activeProviderId}
+                activeProviderActivity={activeProviderActivity}
                 // OpenClaw: default model / Hermes: model.provider === provider.id
                 isDefaultModel={
                   appId === "hermes"
@@ -600,7 +600,7 @@ interface SortableProviderCardProps {
   failoverPriority?: number;
   isInFailoverQueue: boolean;
   onToggleFailover: (enabled: boolean) => void;
-  activeProviderId?: string;
+  activeProviderActivity?: Map<string, number | null>;
   // OpenClaw: default model
   isDefaultModel?: boolean;
   onSetAsDefault?: () => void;
@@ -631,7 +631,7 @@ function SortableProviderCard({
   failoverPriority,
   isInFailoverQueue,
   onToggleFailover,
-  activeProviderId,
+  activeProviderActivity,
   isDefaultModel,
   onSetAsDefault,
 }: SortableProviderCardProps) {
@@ -683,7 +683,7 @@ function SortableProviderCard({
         failoverPriority={failoverPriority}
         isInFailoverQueue={isInFailoverQueue}
         onToggleFailover={onToggleFailover}
-        activeProviderId={activeProviderId}
+        activeProviderActivity={activeProviderActivity}
         // OpenClaw: default model
         isDefaultModel={isDefaultModel}
         onSetAsDefault={onSetAsDefault}

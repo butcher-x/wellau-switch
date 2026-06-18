@@ -128,6 +128,11 @@
     "editCodexProvider": "Codex プロバイダーを編集",
     "configError": "設定エラー",
     "notConfigured": "公式サイト用に未設定",
+    "lastRequest": "前回のリクエスト {{ago}}",
+    "lastRequestJustNow": "たった今",
+    "lastRequestSeconds": "{{count}} 秒前",
+    "lastRequestMinutes": "{{count}} 分前",
+    "lastRequestHours": "{{count}} 時間前",
     "applyToClaudePlugin": "Claude プラグインに適用",
     "removeFromClaudePlugin": "Claude プラグインから解除",
     "dragToReorder": "ドラッグで並べ替え",
@@ -835,6 +840,9 @@
       "toast": {
         "installed": "{{name}} をインストールしました",
         "upgraded": "{{name}} を更新しました"
+      },
+      "hint": {
+        "claudeDesktopProxy": "ヒント：Claude のダウンロードにはグローバルアウトバウンドプロキシが必要です（設定 → ルーティング → グローバルアウトバウンドプロキシ）"
       }
     },
     "update": {

@@ -33,6 +33,8 @@ export interface ActiveTarget {
   app_type: string;
   provider_name: string;
   provider_id: string;
+  /** 该供应商最近一次被请求命中的时间（epoch 毫秒）。用于点亮绿框并显示“上次请求时间”。 */
+  last_request_at?: number | null;
 }
 
 export interface ProxyServerInfo {

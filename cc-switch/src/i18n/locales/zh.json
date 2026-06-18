@@ -128,6 +128,11 @@
     "editCodexProvider": "编辑 Codex 供应商",
     "configError": "配置错误",
     "notConfigured": "未配置官网地址",
+    "lastRequest": "上次请求 {{ago}}",
+    "lastRequestJustNow": "刚刚",
+    "lastRequestSeconds": "{{count}} 秒前",
+    "lastRequestMinutes": "{{count}} 分钟前",
+    "lastRequestHours": "{{count}} 小时前",
     "applyToClaudePlugin": "应用到 Claude 插件",
     "removeFromClaudePlugin": "从 Claude 插件移除",
     "dragToReorder": "拖拽以重新排序",
@@ -835,6 +840,9 @@
       "toast": {
         "installed": "{{name}} 安装完成",
         "upgraded": "{{name}} 已升级"
+      },
+      "hint": {
+        "claudeDesktopProxy": "提示：Claude 下载需走全局代理（设置 → 路由 → 全局出站代理）"
       }
     },
     "update": {

@@ -18,7 +18,10 @@ use super::{
     thinking_rectifier::{
         normalize_thinking_type, rectify_anthropic_request, should_rectify_thinking_signature,
     },
-    types::{CopilotOptimizerConfig, OptimizerConfig, ProxyStatus, RectifierConfig},
+    types::{
+        mark_active, ActiveProviderMap, CopilotOptimizerConfig, OptimizerConfig, ProxyStatus,
+        RectifierConfig,
+    },
     ProxyError,
 };
 use crate::commands::{CodexOAuthState, CopilotAuthState};
@@ -95,7 +98,7 @@ pub struct RequestForwarder {
     /// 共享的 ProviderRouter（持有熔断器状态）
     router: Arc<ProviderRouter>,
     status: Arc<RwLock<ProxyStatus>>,
-    current_providers: Arc<RwLock<std::collections::HashMap<String, (String, String)>>>,
+    current_providers: Arc<RwLock<ActiveProviderMap>>,
     gemini_shadow: Arc<GeminiShadowStore>,
     codex_chat_history: Arc<CodexChatHistoryStore>,
     /// 故障转移切换管理器
@@ -177,7 +180,7 @@ impl RequestForwarder {
         router: Arc<ProviderRouter>,
         non_streaming_timeout: u64,
         status: Arc<RwLock<ProxyStatus>>,
-        current_providers: Arc<RwLock<std::collections::HashMap<String, (String, String)>>>,
+        current_providers: Arc<RwLock<ActiveProviderMap>>,
         gemini_shadow: Arc<GeminiShadowStore>,
         codex_chat_history: Arc<CodexChatHistoryStore>,
         failover_manager: Arc<FailoverSwitchManager>,
@@ -454,6 +457,14 @@ impl RequestForwarder {
                 status.current_provider_id = Some(provider.id.clone());
             }
 
+            // 请求一打到该渠道就标记为活跃 → 前端立即点亮绿框并刷新“上次请求时间”。
+            // 放在 attempt 维度（而非 success）：并行请求各自打到不同渠道时都会点亮，
+            // 失败/降级由健康徽章区分；空闲超窗后 get_status 自动剪除使绿框淡出。
+            {
+                let mut active = self.current_providers.write().await;
+                mark_active(&mut active, app_type_str, &provider.id, &provider.name);
+            }
+
             // 转发请求（每个 Provider 只尝试一次，重试由客户端控制）
             match self
                 .forward(
@@ -473,15 +484,6 @@ impl RequestForwarder {
                     // HalfOpen 探测仍同步等待，保证 permit 与熔断状态及时释放。
                     self.record_success_result(&provider.id, app_type_str, used_half_open_permit)
                         .await;
-
-                    // 更新当前应用类型使用的 provider
-                    {
-                        let mut current_providers = self.current_providers.write().await;
-                        current_providers.insert(
-                            app_type_str.to_string(),
-                            (provider.id.clone(), provider.name.clone()),
-                        );
-                    }
 
                     // 更新成功统计
                     {
@@ -577,15 +579,6 @@ impl RequestForwarder {
                                         used_half_open_permit,
                                     )
                                     .await;
-
-                                    {
-                                        let mut current_providers =
-                                            self.current_providers.write().await;
-                                        current_providers.insert(
-                                            app_type_str.to_string(),
-                                            (provider.id.clone(), provider.name.clone()),
-                                        );
-                                    }
 
                                     {
                                         let mut status = self.status.write().await;
@@ -721,16 +714,6 @@ impl RequestForwarder {
                                             used_half_open_permit,
                                         )
                                         .await;
-
-                                        // 更新当前应用类型使用的 provider
-                                        {
-                                            let mut current_providers =
-                                                self.current_providers.write().await;
-                                            current_providers.insert(
-                                                app_type_str.to_string(),
-                                                (provider.id.clone(), provider.name.clone()),
-                                            );
-                                        }
 
                                         // 更新成功统计
                                         {
@@ -887,15 +870,6 @@ impl RequestForwarder {
                                         used_half_open_permit,
                                     )
                                     .await;
-
-                                    {
-                                        let mut current_providers =
-                                            self.current_providers.write().await;
-                                        current_providers.insert(
-                                            app_type_str.to_string(),
-                                            (provider.id.clone(), provider.name.clone()),
-                                        );
-                                    }
 
                                     {
                                         let mut status = self.status.write().await;

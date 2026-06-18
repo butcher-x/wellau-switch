@@ -71,9 +71,17 @@ export function WellauInstallSection() {
               key={target.id}
               className="flex items-center gap-3 rounded-lg px-3 py-2.5"
             >
-              <span className="min-w-0 flex-1 truncate text-sm">
-                {nameOf(target)}
-              </span>
+              <div className="min-w-0 flex-1">
+                <span className="block truncate text-sm">{nameOf(target)}</span>
+                {target.id === "claude-desktop" && !target.installed && (
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {t("settings.install.hint.claudeDesktopProxy", {
+                      defaultValue:
+                        "提示：Claude 下载需走全局代理（设置 → 路由 → 全局出站代理）",
+                    })}
+                  </p>
+                )}
+              </div>
               <ActionCell
                 target={target}
                 busy={busy}

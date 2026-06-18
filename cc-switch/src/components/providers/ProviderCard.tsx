@@ -59,10 +59,37 @@ interface ProviderCardProps {
   failoverPriority?: number; // 故障转移优先级（1 = P1, 2 = P2, ...）
   isInFailoverQueue?: boolean; // 是否在故障转移队列中
   onToggleFailover?: (enabled: boolean) => void; // 切换故障转移队列
-  activeProviderId?: string; // 代理当前实际使用的供应商 ID（用于故障转移模式下标注绿色边框）
+  activeProviderActivity?: Map<string, number | null>; // provider_id -> 上次请求时间（最近活跃即点亮绿框）
   // OpenClaw: default model
   isDefaultModel?: boolean;
   onSetAsDefault?: () => void;
+}
+
+/** 把“上次请求时间”格式化为相对文案（刚刚 / Xs 前 / Xm 前 / Xh 前）。 */
+function formatTimeAgo(
+  ts: number | null,
+  now: number,
+  t: ReturnType<typeof useTranslation>["t"],
+): string {
+  if (!ts) return t("provider.lastRequestJustNow", { defaultValue: "刚刚" });
+  const sec = Math.max(0, Math.floor((now - ts) / 1000));
+  if (sec < 5) return t("provider.lastRequestJustNow", { defaultValue: "刚刚" });
+  if (sec < 60)
+    return t("provider.lastRequestSeconds", {
+      count: sec,
+      defaultValue: "{{count}} 秒前",
+    });
+  const min = Math.floor(sec / 60);
+  if (min < 60)
+    return t("provider.lastRequestMinutes", {
+      count: min,
+      defaultValue: "{{count}} 分钟前",
+    });
+  const hr = Math.floor(min / 60);
+  return t("provider.lastRequestHours", {
+    count: hr,
+    defaultValue: "{{count}} 小时前",
+  });
 }
 
 /** 判断是否为官方供应商（无自定义 base URL / API key，直连官方 API） */
@@ -158,12 +185,20 @@ export function ProviderCard({
   failoverPriority,
   isInFailoverQueue = false,
   onToggleFailover,
-  activeProviderId,
+  activeProviderActivity,
   // OpenClaw: default model
   isDefaultModel,
   onSetAsDefault,
 }: ProviderCardProps) {
   const { t } = useTranslation();
+
+  // “上次请求 Xs 前”文案需随时间走动：接管态下每秒刷新一次本地时钟。
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isProxyTakeover) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [isProxyTakeover]);
 
   // OMO and OMO Slim share the same card behavior
   const isAnyOmo = isOmo || isOmoSlim;
@@ -270,20 +305,25 @@ export function ProviderCard({
     onOpenWebsite(displayUrl);
   };
 
+  // 该供应商是否“最近被请求命中”（后端已按活跃窗口剪除陈旧项）。存在即活跃；
+  // 值为上次请求时间（epoch ms，可能为 null）。用于多渠道并行各自点亮绿框。
+  const isRecentlyActive = activeProviderActivity?.has(provider.id) ?? false;
+  const lastRequestAt = activeProviderActivity?.get(provider.id) ?? null;
+
   // 判断是否是"当前使用中"的供应商
   // - OMO/OMO Slim 供应商：使用 isCurrent
   // - OpenClaw：使用默认模型归属的 provider 作为当前项（蓝色边框）
   // - OpenCode（非 OMO）：不存在"当前"概念，返回 false
-  // - 故障转移模式：代理实际使用的供应商（activeProviderId）
-  // - 普通模式：isCurrent
+  // - 接管模式（含故障转移）：以“最近活跃”为准，支持并行多渠道同时点亮；
+  //   尚无活跃记录时回退 isCurrent，避免刚接管还没发请求时无任何高亮。
   const isActiveProvider = isAnyOmo
     ? isCurrent
     : appId === "openclaw"
       ? Boolean(isDefaultModel)
       : appId === "opencode"
         ? false
-        : isAutoFailoverEnabled
-          ? activeProviderId === provider.id
+        : isProxyTakeover
+          ? isRecentlyActive || (!isAutoFailoverEnabled && isCurrent)
           : isCurrent;
 
   const shouldUseGreen = !isAnyOmo && isProxyTakeover && isActiveProvider;
@@ -422,6 +462,22 @@ export function ProviderCard({
                 failoverPriority && (
                   <FailoverPriorityBadge priority={failoverPriority} />
                 )}
+
+              {isProxyTakeover && isRecentlyActive && (
+                <span
+                  className="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400"
+                  title={
+                    lastRequestAt
+                      ? new Date(lastRequestAt).toLocaleString()
+                      : undefined
+                  }
+                >
+                  {t("provider.lastRequest", {
+                    ago: formatTimeAgo(lastRequestAt, now, t),
+                    defaultValue: "上次请求 {{ago}}",
+                  })}
+                </span>
+              )}
 
               {provider.category === "third_party" &&
                 provider.meta?.isPartner && (

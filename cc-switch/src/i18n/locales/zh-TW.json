@@ -128,6 +128,11 @@
     "editCodexProvider": "編輯 Codex 供應商",
     "configError": "設定錯誤",
     "notConfigured": "未設定官網位址",
+    "lastRequest": "上次請求 {{ago}}",
+    "lastRequestJustNow": "剛剛",
+    "lastRequestSeconds": "{{count}} 秒前",
+    "lastRequestMinutes": "{{count}} 分鐘前",
+    "lastRequestHours": "{{count}} 小時前",
     "applyToClaudePlugin": "套用至 Claude 外掛程式",
     "removeFromClaudePlugin": "從 Claude 外掛程式移除",
     "dragToReorder": "拖曳以重新排序",
@@ -806,6 +811,9 @@
       "toast": {
         "installed": "{{name}} 安裝完成",
         "upgraded": "{{name}} 已升級"
+      },
+      "hint": {
+        "claudeDesktopProxy": "提示：Claude 下載需走全域代理（設定 → 路由 → 全域出站代理）"
       }
     },
     "update": {

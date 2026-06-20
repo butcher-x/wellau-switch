@@ -58,11 +58,12 @@ impl Database {
     /// 新装由 schema seed 直接带上这些默认值；本方法只为升级到 Wellau 默认值的
     /// 老库做一次性回填，用 settings flag 保证只执行一次，不会反复覆盖用户后续修改。
     /// 设定：enabled=1（启用路由）、auto_failover_enabled=1（开启故障转移）、
-    /// max_retries=10（实际等于"试遍所有供应商"）、circuit_failure_threshold=4。
+    /// max_retries=10（实际等于"试遍所有供应商"），熔断默认值更积极。
     pub fn apply_wellau_proxy_defaults_once(&self) -> Result<bool, AppError> {
         const FLAG: &str = "wellau_proxy_defaults_v1";
+        const CIRCUIT_FLAG: &str = "wellau_proxy_circuit_defaults_v2";
         if self.get_bool_flag(FLAG).unwrap_or(false) {
-            return Ok(false);
+            return self.apply_wellau_circuit_defaults_once(CIRCUIT_FLAG);
         }
 
         {
@@ -72,7 +73,9 @@ impl Database {
                  SET enabled = 1,
                      auto_failover_enabled = 1,
                      max_retries = 10,
-                     circuit_failure_threshold = 4,
+                     circuit_failure_threshold = 1,
+                     circuit_success_threshold = 1,
+                     circuit_timeout_seconds = 5,
                      updated_at = datetime('now')
                  WHERE app_type IN ('claude','codex')",
                 [],
@@ -81,6 +84,33 @@ impl Database {
         }
 
         self.set_setting(FLAG, "true")?;
+        self.apply_wellau_circuit_defaults_once(CIRCUIT_FLAG)?;
+        Ok(true)
+    }
+
+    fn apply_wellau_circuit_defaults_once(&self, flag: &str) -> Result<bool, AppError> {
+        if self.get_bool_flag(flag).unwrap_or(false) {
+            return Ok(false);
+        }
+
+        {
+            let conn = lock_conn!(self.conn);
+            conn.execute(
+                "UPDATE proxy_config
+                 SET circuit_failure_threshold = 1,
+                     circuit_success_threshold = 1,
+                     circuit_timeout_seconds = 5,
+                     updated_at = datetime('now')
+                 WHERE app_type IN ('claude','codex','gemini')
+                   AND circuit_failure_threshold IN (4, 8)
+                   AND circuit_success_threshold IN (2, 3)
+                   AND circuit_timeout_seconds IN (60, 90)",
+                [],
+            )
+            .map_err(|e| AppError::Database(e.to_string()))?;
+        }
+
+        self.set_setting(flag, "true")?;
         Ok(true)
     }
 
@@ -291,9 +321,9 @@ impl Database {
                     streaming_first_byte_timeout: 60,
                     streaming_idle_timeout: 120,
                     non_streaming_timeout: 600,
-                    circuit_failure_threshold: 4,
-                    circuit_success_threshold: 2,
-                    circuit_timeout_seconds: 60,
+                    circuit_failure_threshold: 1,
+                    circuit_success_threshold: 1,
+                    circuit_timeout_seconds: 5,
                     circuit_error_rate_threshold: 0.6,
                     circuit_min_requests: 10,
                 })
@@ -356,10 +386,10 @@ impl Database {
         // 根据 app_type 使用不同的默认值（与 schema.rs seed 保持一致）
         let (retries, fb_timeout, idle_timeout, cb_fail, cb_succ, cb_timeout, cb_rate, cb_min) =
             match app_type {
-                "claude" => (6, 90, 180, 8, 3, 90, 0.7, 15),
-                "codex" => (3, 60, 120, 4, 2, 60, 0.6, 10),
-                "gemini" => (5, 60, 120, 4, 2, 60, 0.6, 10),
-                _ => (3, 60, 120, 4, 2, 60, 0.6, 10), // 默认值
+                "claude" => (6, 90, 180, 1, 1, 5, 0.7, 15),
+                "codex" => (3, 60, 120, 1, 1, 5, 0.6, 10),
+                "gemini" => (5, 60, 120, 1, 1, 5, 0.6, 10),
+                _ => (3, 60, 120, 1, 1, 5, 0.6, 10), // 默认值
             };
 
         conn.execute(
@@ -400,7 +430,7 @@ impl Database {
                 streaming_first_byte_timeout, streaming_idle_timeout, non_streaming_timeout,
                 circuit_failure_threshold, circuit_success_threshold, circuit_timeout_seconds,
                 circuit_error_rate_threshold, circuit_min_requests
-            ) VALUES ('claude', 6, 90, 180, 600, 8, 3, 90, 0.7, 15)",
+            ) VALUES ('claude', 6, 90, 180, 600, 1, 1, 5, 0.7, 15)",
             [],
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
@@ -412,7 +442,7 @@ impl Database {
                 streaming_first_byte_timeout, streaming_idle_timeout, non_streaming_timeout,
                 circuit_failure_threshold, circuit_success_threshold, circuit_timeout_seconds,
                 circuit_error_rate_threshold, circuit_min_requests
-            ) VALUES ('codex', 3, 60, 120, 600, 4, 2, 60, 0.6, 10)",
+            ) VALUES ('codex', 3, 60, 120, 600, 1, 1, 5, 0.6, 10)",
             [],
         )
         .map_err(|e| AppError::Database(e.to_string()))?;
@@ -424,7 +454,7 @@ impl Database {
                 streaming_first_byte_timeout, streaming_idle_timeout, non_streaming_timeout,
                 circuit_failure_threshold, circuit_success_threshold, circuit_timeout_seconds,
                 circuit_error_rate_threshold, circuit_min_requests
-            ) VALUES ('gemini', 5, 60, 120, 600, 4, 2, 60, 0.6, 10)",
+            ) VALUES ('gemini', 5, 60, 120, 600, 1, 1, 5, 0.6, 10)",
             [],
         )
         .map_err(|e| AppError::Database(e.to_string()))?;

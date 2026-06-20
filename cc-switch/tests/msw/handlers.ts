@@ -356,9 +356,9 @@ export const handlers = [
 
   http.post(`${TAURI_ENDPOINT}/get_circuit_breaker_config`, () =>
     success({
-      failureThreshold: 3,
-      successThreshold: 2,
-      timeoutSeconds: 60,
+      failureThreshold: 1,
+      successThreshold: 1,
+      timeoutSeconds: 5,
       errorRateThreshold: 50,
       minRequests: 5,
     }),

@@ -20,9 +20,9 @@ export function CircuitBreakerConfigPanel() {
 
   // 使用字符串状态以支持完全清空输入框
   const [formData, setFormData] = useState({
-    failureThreshold: "5",
-    successThreshold: "2",
-    timeoutSeconds: "60",
+    failureThreshold: "1",
+    successThreshold: "1",
+    timeoutSeconds: "5",
     errorRateThreshold: "50", // 存储百分比值
     minRequests: "10",
   });

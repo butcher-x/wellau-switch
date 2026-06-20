@@ -28,9 +28,9 @@ export function AutoFailoverConfigPanel({
     streamingFirstByteTimeout: "60",
     streamingIdleTimeout: "120",
     nonStreamingTimeout: "600",
-    circuitFailureThreshold: "5",
-    circuitSuccessThreshold: "2",
-    circuitTimeoutSeconds: "60",
+    circuitFailureThreshold: "1",
+    circuitSuccessThreshold: "1",
+    circuitTimeoutSeconds: "5",
     circuitErrorRateThreshold: "50", // 存储百分比值
     circuitMinRequests: "10",
   });

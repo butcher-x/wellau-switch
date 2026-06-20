@@ -128,8 +128,8 @@ impl Database {
             enabled INTEGER NOT NULL DEFAULT 0, auto_failover_enabled INTEGER NOT NULL DEFAULT 0,
             max_retries INTEGER NOT NULL DEFAULT 3, streaming_first_byte_timeout INTEGER NOT NULL DEFAULT 60,
             streaming_idle_timeout INTEGER NOT NULL DEFAULT 120, non_streaming_timeout INTEGER NOT NULL DEFAULT 600,
-            circuit_failure_threshold INTEGER NOT NULL DEFAULT 4, circuit_success_threshold INTEGER NOT NULL DEFAULT 2,
-            circuit_timeout_seconds INTEGER NOT NULL DEFAULT 60, circuit_error_rate_threshold REAL NOT NULL DEFAULT 0.6,
+            circuit_failure_threshold INTEGER NOT NULL DEFAULT 1, circuit_success_threshold INTEGER NOT NULL DEFAULT 1,
+            circuit_timeout_seconds INTEGER NOT NULL DEFAULT 5, circuit_error_rate_threshold REAL NOT NULL DEFAULT 0.6,
             circuit_min_requests INTEGER NOT NULL DEFAULT 10,
             default_cost_multiplier TEXT NOT NULL DEFAULT '1',
             pricing_model_source TEXT NOT NULL DEFAULT 'response',
@@ -143,13 +143,13 @@ impl Database {
         // - 旧表会在 apply_schema_migrations() 中迁移为三行结构后再插入。
         if Self::has_column(conn, "proxy_config", "app_type")? {
             // Wellau 默认：claude/codex 默认启用路由 + 故障转移，max_retries=10
-            // （实际等于"试遍所有供应商"），失败阈值统一为 4。
+            // （实际等于"试遍所有供应商"），熔断恢复更积极。
             conn.execute(
                 "INSERT OR IGNORE INTO proxy_config (app_type, enabled, auto_failover_enabled, max_retries,
                 streaming_first_byte_timeout, streaming_idle_timeout, non_streaming_timeout,
                 circuit_failure_threshold, circuit_success_threshold, circuit_timeout_seconds,
                 circuit_error_rate_threshold, circuit_min_requests)
-                VALUES ('claude', 1, 1, 10, 90, 180, 600, 4, 3, 90, 0.7, 15)",
+                VALUES ('claude', 1, 1, 10, 90, 180, 600, 1, 1, 5, 0.7, 15)",
                 [],
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -158,7 +158,7 @@ impl Database {
                 streaming_first_byte_timeout, streaming_idle_timeout, non_streaming_timeout,
                 circuit_failure_threshold, circuit_success_threshold, circuit_timeout_seconds,
                 circuit_error_rate_threshold, circuit_min_requests)
-                VALUES ('codex', 1, 1, 10, 60, 120, 600, 4, 2, 60, 0.6, 10)",
+                VALUES ('codex', 1, 1, 10, 60, 120, 600, 1, 1, 5, 0.6, 10)",
                 [],
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -167,7 +167,7 @@ impl Database {
                 streaming_first_byte_timeout, streaming_idle_timeout, non_streaming_timeout,
                 circuit_failure_threshold, circuit_success_threshold, circuit_timeout_seconds,
                 circuit_error_rate_threshold, circuit_min_requests)
-                VALUES ('gemini', 5, 60, 120, 600, 4, 2, 60, 0.6, 10)",
+                VALUES ('gemini', 5, 60, 120, 600, 1, 1, 5, 0.6, 10)",
                 [],
             )
             .map_err(|e| AppError::Database(e.to_string()))?;
@@ -708,7 +708,7 @@ impl Database {
              FROM circuit_breaker_config WHERE id = 1", [],
             |row| Ok((row.get::<_, i32>(0)?, row.get::<_, i32>(1)?, row.get::<_, i64>(2)?,
                       row.get::<_, f64>(3)?, row.get::<_, i32>(4)?))
-        ).unwrap_or((5, 2, 60, 0.5, 10));
+        ).unwrap_or((1, 1, 5, 0.5, 10));
 
         let get_bool = |key: &str| -> bool {
             conn.query_row("SELECT value FROM settings WHERE key = ?", [key], |r| {
@@ -726,9 +726,9 @@ impl Database {
                 6,
                 45,
                 90,
-                8,
-                3,
-                90,
+                1,
+                1,
+                5,
                 0.6,
                 15,
             ),
@@ -769,8 +769,8 @@ impl Database {
             enabled INTEGER NOT NULL DEFAULT 0, auto_failover_enabled INTEGER NOT NULL DEFAULT 0,
             max_retries INTEGER NOT NULL DEFAULT 3, streaming_first_byte_timeout INTEGER NOT NULL DEFAULT 60,
             streaming_idle_timeout INTEGER NOT NULL DEFAULT 120, non_streaming_timeout INTEGER NOT NULL DEFAULT 600,
-            circuit_failure_threshold INTEGER NOT NULL DEFAULT 4, circuit_success_threshold INTEGER NOT NULL DEFAULT 2,
-            circuit_timeout_seconds INTEGER NOT NULL DEFAULT 60, circuit_error_rate_threshold REAL NOT NULL DEFAULT 0.6,
+            circuit_failure_threshold INTEGER NOT NULL DEFAULT 1, circuit_success_threshold INTEGER NOT NULL DEFAULT 1,
+            circuit_timeout_seconds INTEGER NOT NULL DEFAULT 5, circuit_error_rate_threshold REAL NOT NULL DEFAULT 0.6,
             circuit_min_requests INTEGER NOT NULL DEFAULT 10,
             default_cost_multiplier TEXT NOT NULL DEFAULT '1',
             pricing_model_source TEXT NOT NULL DEFAULT 'response',

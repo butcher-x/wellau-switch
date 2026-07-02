@@ -5,6 +5,7 @@ import type { AppId } from "@/lib/api/types";
 import type { Provider } from "@/types";
 import { wellauAuthApi } from "@wellau/auth/api";
 import type { ImportSummary, WellauKey } from "@wellau/auth/types";
+import { DEFAULT_CLAUDE_CLI_USER_AGENT } from "@/config/userAgentPresets";
 
 /** Wellau 网关基础地址（与 wellau-installer 的 WELLAU_BASE_URL 保持一致）。 */
 const WELLAU_BASE_URL = "https://api.wellau.com";
@@ -110,6 +111,12 @@ async function buildProvider(
     category: "third_party",
     createdAt: Date.now(),
     icon: target.icon,
+    // Wellau 网关校验 Claude Code UA 最低版本；导入时写入与 stream_check 一致的 UA，
+    // 保证本地路由与健康检查不会因旧版 claude-cli/2.1.2 探测头被 400 拒绝。
+    meta:
+      target.appType === "claude"
+        ? { customUserAgent: DEFAULT_CLAUDE_CLI_USER_AGENT }
+        : undefined,
     // 自动加入故障转移队列，配合默认开启的 auto_failover。
     inFailoverQueue: true,
   };

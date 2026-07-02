@@ -20,6 +20,10 @@ use crate::proxy::providers::{
     get_adapter, AuthInfo, AuthStrategy, ClaudeAdapter, ProviderAdapter,
 };
 
+/// Anthropic 原生流式检测默认 User-Agent，与前端 `userAgentPresets.ts` 第一条预设保持一致。
+/// 部分上游（如 Wellau api.wellau.com）会校验 Claude Code 最低版本，过旧 UA 会导致 400 误报。
+const DEFAULT_CLAUDE_CLI_USER_AGENT: &str = "claude-cli/2.1.161 (external, cli)";
+
 /// 健康状态枚举
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -479,7 +483,7 @@ impl StreamCheckService {
                 .header("accept-encoding", "identity")
                 .header("accept-language", "*")
                 // Client identification headers
-                .header("user-agent", "claude-cli/2.1.2 (external, cli)")
+                .header("user-agent", DEFAULT_CLAUDE_CLI_USER_AGENT)
                 .header("x-app", "cli")
                 // x-stainless SDK headers (dynamic local system info)
                 .header("x-stainless-lang", "js")

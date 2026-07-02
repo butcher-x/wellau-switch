@@ -1,6 +1,6 @@
 {
-  "productName": "Wellau Router",
-  "mainBinaryName": "Wellau Router",
+  "productName": "Wellau Switch",
+  "mainBinaryName": "Wellau Switch",
   "identifier": "com.wellau.switch",
   "app": {
     "windows": [

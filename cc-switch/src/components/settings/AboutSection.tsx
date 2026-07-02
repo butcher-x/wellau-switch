@@ -36,6 +36,11 @@ import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 import appIcon from "@/assets/icons/app-icon.png";
 import { APP_ICON_MAP } from "@/config/appConfig";
+import {
+  downloadProducts,
+  wellauSwitchDownloadConfig,
+  type DownloadPlatform,
+} from "@/config/downloads";
 import type { AppId } from "@/lib/api/types";
 import { extractErrorMessage } from "@/utils/errorUtils";
 import { isWindows } from "@/lib/platform";
@@ -177,6 +182,11 @@ const TOOL_APP_IDS: Record<ToolName, AppId> = {
   opencode: "opencode",
   openclaw: "openclaw",
   hermes: "hermes",
+};
+
+const DOWNLOAD_PLATFORM_LABELS: Record<DownloadPlatform, string> = {
+  windows: "Windows",
+  macos: "macOS",
 };
 
 export function AboutSection({ isPortable }: AboutSectionProps) {
@@ -371,13 +381,13 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
 
       if (!displayVersion) {
         await settingsApi.openExternal(
-          "https://github.com/farion1231/cc-switch/releases",
+          wellauSwitchDownloadConfig.releaseNotesBaseUrl,
         );
         return;
       }
 
       await settingsApi.openExternal(
-        `https://github.com/farion1231/cc-switch/releases/tag/${displayVersion}`,
+        `${wellauSwitchDownloadConfig.releaseNotesBaseUrl}/tag/${displayVersion}`,
       );
     } catch (error) {
       console.error("[AboutSection] Failed to open release notes", error);
@@ -769,9 +779,13 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <img src={appIcon} alt="CC Switch" className="h-5 w-5" />
+              <img
+                src={appIcon}
+                alt={wellauBrand.productName}
+                className="h-5 w-5"
+              />
               <h4 className="text-lg font-semibold text-foreground">
-                CC Switch
+                {wellauBrand.productName}
               </h4>
             </div>
             <div className="flex items-center gap-2">
@@ -811,7 +825,7 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
               size="sm"
               onClick={() =>
                 settingsApi.openExternal(
-                  "https://github.com/farion1231/cc-switch",
+                  wellauSwitchDownloadConfig.repositoryUrl,
                 )
               }
               className="h-8 gap-1.5 text-xs"
@@ -881,6 +895,76 @@ export function AboutSection({ isPortable }: AboutSectionProps) {
             )}
           </motion.div>
         )}
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3, delay: 0.2 }}
+        className="space-y-3"
+      >
+        <div>
+          <h4 className="text-sm font-medium text-foreground">
+            {t("settings.downloads")}
+          </h4>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t("settings.downloadsHint")}
+          </p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          {downloadProducts.map((product) => (
+            <motion.div
+              key={product.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-lg border border-border bg-card/70 p-4 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 space-y-1">
+                  <h5 className="truncate text-sm font-semibold text-foreground">
+                    {product.name}
+                  </h5>
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {t(product.descriptionKey)}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() =>
+                    settingsApi.openExternal(product.repositoryUrl)
+                  }
+                  className="h-8 w-8 shrink-0"
+                  aria-label={t("settings.openRepository", {
+                    product: product.name,
+                  })}
+                >
+                  <Github className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {product.downloads.map((download) => (
+                  <Button
+                    key={download.platform}
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => settingsApi.openExternal(download.url)}
+                    className="h-8 gap-1.5 text-xs"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    {t("settings.downloadFor", {
+                      platform: DOWNLOAD_PLATFORM_LABELS[download.platform],
+                    })}
+                  </Button>
+                ))}
+              </div>
+            </motion.div>
+          ))}
+        </div>
       </motion.div>
 
       <div className="space-y-3">

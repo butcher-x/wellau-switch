@@ -12,7 +12,7 @@ export const wellauBrand = {
   bundleIdentifier: "com.wellau.switch",
   defaultVisibleApps: {
     claude: true,
-    "claude-desktop": false,
+    "claude-desktop": true,
     codex: true,
     gemini: false,
     opencode: false,

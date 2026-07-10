@@ -60,6 +60,7 @@ jobs:
             target: mac-intel
             args: "--bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"
     runs-on: ${{ matrix.platform }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == matrix.target }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -106,7 +107,6 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build & publish (tauri-action)
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == matrix.target }}
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

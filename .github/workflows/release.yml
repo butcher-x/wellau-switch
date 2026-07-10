@@ -57,7 +57,7 @@ jobs:
           case "$target" in
             all)
               cat >> "$GITHUB_OUTPUT" <<'JSON'
-          matrix={"include":[{"platform":"windows-latest","target":"windows","args":"--bundles nsis --config ../wellau/tauri/tauri.wellau.conf.json"},{"platform":"macos-latest","target":"mac-apple-silicon","args":"--bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"},{"platform":"macos-15-intel","target":"mac-intel","args":"--bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"},{"platform":"macos-latest","target":"mac-universal","rustTargets":"aarch64-apple-darwin x86_64-apple-darwin","args":"--target universal-apple-darwin --bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"},{"platform":"ubuntu-22.04","target":"linux","args":"--bundles appimage,deb,rpm --config ../wellau/tauri/tauri.wellau.conf.json"}]}
+          matrix={"include":[{"platform":"windows-latest","target":"windows","args":"--bundles nsis --config ../wellau/tauri/tauri.wellau.conf.json"},{"platform":"macos-latest","target":"mac-apple-silicon","args":"--bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"},{"platform":"macos-15-intel","target":"mac-intel","args":"--bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"},{"platform":"macos-latest","target":"mac-universal","rustTargets":"aarch64-apple-darwin,x86_64-apple-darwin","args":"--target universal-apple-darwin --bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"},{"platform":"ubuntu-22.04","target":"linux","args":"--bundles appimage,deb,rpm --config ../wellau/tauri/tauri.wellau.conf.json"}]}
           JSON
               ;;
             windows)
@@ -77,7 +77,7 @@ jobs:
               ;;
             mac-universal)
               cat >> "$GITHUB_OUTPUT" <<'JSON'
-          matrix={"include":[{"platform":"macos-latest","target":"mac-universal","rustTargets":"aarch64-apple-darwin x86_64-apple-darwin","args":"--target universal-apple-darwin --bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"}]}
+          matrix={"include":[{"platform":"macos-latest","target":"mac-universal","rustTargets":"aarch64-apple-darwin,x86_64-apple-darwin","args":"--target universal-apple-darwin --bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"}]}
           JSON
               ;;
             linux)

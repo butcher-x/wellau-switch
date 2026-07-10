@@ -42,25 +42,55 @@ permissions:
   contents: write
 
 jobs:
+  release-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: Select release targets
+        id: matrix
+        shell: bash
+        run: |
+          target="${{ github.event.inputs.target || 'all' }}"
+
+          case "$target" in
+            all)
+              cat >> "$GITHUB_OUTPUT" <<'JSON'
+          matrix={"include":[{"platform":"windows-latest","target":"windows","args":"--bundles nsis --config ../wellau/tauri/tauri.wellau.conf.json"},{"platform":"macos-latest","target":"mac-apple-silicon","args":"--bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"},{"platform":"ubuntu-22.04","target":"linux","args":"--bundles appimage,deb,rpm --config ../wellau/tauri/tauri.wellau.conf.json"},{"platform":"macos-13","target":"mac-intel","args":"--bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"}]}
+          JSON
+              ;;
+            windows)
+              cat >> "$GITHUB_OUTPUT" <<'JSON'
+          matrix={"include":[{"platform":"windows-latest","target":"windows","args":"--bundles nsis --config ../wellau/tauri/tauri.wellau.conf.json"}]}
+          JSON
+              ;;
+            mac-apple-silicon)
+              cat >> "$GITHUB_OUTPUT" <<'JSON'
+          matrix={"include":[{"platform":"macos-latest","target":"mac-apple-silicon","args":"--bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"}]}
+          JSON
+              ;;
+            mac-intel)
+              cat >> "$GITHUB_OUTPUT" <<'JSON'
+          matrix={"include":[{"platform":"macos-13","target":"mac-intel","args":"--bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"}]}
+          JSON
+              ;;
+            linux)
+              cat >> "$GITHUB_OUTPUT" <<'JSON'
+          matrix={"include":[{"platform":"ubuntu-22.04","target":"linux","args":"--bundles appimage,deb,rpm --config ../wellau/tauri/tauri.wellau.conf.json"}]}
+          JSON
+              ;;
+            *)
+              echo "Unknown release target: $target" >&2
+              exit 1
+              ;;
+          esac
+
   release:
+    needs: release-matrix
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: windows-latest
-            target: windows
-            args: "--bundles nsis --config ../wellau/tauri/tauri.wellau.conf.json"
-          - platform: macos-latest # Apple Silicon -> darwin-aarch64
-            target: mac-apple-silicon
-            args: "--bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"
-          - platform: ubuntu-22.04
-            target: linux
-            args: "--bundles appimage,deb,rpm --config ../wellau/tauri/tauri.wellau.conf.json"
-          - platform: macos-13 # Intel -> darwin-x86_64
-            target: mac-intel
-            args: "--bundles app,dmg --config ../wellau/tauri/tauri.wellau.conf.json"
+      matrix: ${{ fromJson(needs.release-matrix.outputs.matrix) }}
     runs-on: ${{ matrix.platform }}
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.target == 'all' || inputs.target == matrix.target }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

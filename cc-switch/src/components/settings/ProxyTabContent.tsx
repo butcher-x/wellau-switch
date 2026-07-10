@@ -102,10 +102,6 @@ export function ProxyTabContent({
           </AccordionTrigger>
           <AccordionContent className="px-6 pb-6 pt-4 border-t border-border/50">
             <ProxyPanel
-              enableLocalProxy={settings?.enableLocalProxy ?? false}
-              onEnableLocalProxyChange={(checked) =>
-                onAutoSave({ enableLocalProxy: checked })
-              }
               onToggleProxy={handleToggleProxy}
               isProxyPending={isProxyPending}
             />

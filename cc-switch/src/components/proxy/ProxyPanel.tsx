@@ -7,14 +7,12 @@ import {
   ListOrdered,
   Save,
   Loader2,
-  Zap,
   Power,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { ToggleRow } from "@/components/ui/toggle-row";
 import { useProxyStatus } from "@/hooks/useProxyStatus";
 import { toast } from "sonner";
 import { useFailoverQueue } from "@/lib/query/failover";
@@ -32,15 +30,11 @@ import { AnimatePresence, motion } from "framer-motion";
 import { extractErrorMessage } from "@/utils/errorUtils";
 
 interface ProxyPanelProps {
-  enableLocalProxy: boolean;
-  onEnableLocalProxyChange: (checked: boolean) => void;
   onToggleProxy: (checked: boolean) => Promise<void>;
   isProxyPending: boolean;
 }
 
 export function ProxyPanel({
-  enableLocalProxy,
-  onEnableLocalProxyChange,
   onToggleProxy,
   isProxyPending,
 }: ProxyPanelProps) {
@@ -221,16 +215,7 @@ export function ProxyPanel({
   return (
     <>
       <section className="space-y-4">
-        {/* [1] Enable proxy button on main page — always visible */}
-        <ToggleRow
-          icon={<Zap className="h-4 w-4 text-green-500" />}
-          title={t("settings.advanced.proxy.enableFeature")}
-          description={t("settings.advanced.proxy.enableFeatureDescription")}
-          checked={enableLocalProxy}
-          onCheckedChange={onEnableLocalProxyChange}
-        />
-
-        {/* [2] Proxy service toggle — always visible */}
+        {/* Proxy service toggle — always visible */}
         <div className="flex items-center justify-between rounded-xl border border-border bg-card/50 p-4 transition-colors hover:bg-muted/50">
           <div className="flex items-center gap-3">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-background ring-1 ring-border">

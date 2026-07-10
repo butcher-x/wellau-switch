@@ -1296,9 +1296,7 @@ function App() {
                   {activeApp === "claude-desktop" ? (
                     <ClaudeDesktopRouteToggle />
                   ) : (
-                    settingsData?.enableLocalProxy && (
-                      <ProxyFailoverToggle activeApp={activeApp} />
-                    )
+                    <ProxyFailoverToggle activeApp={activeApp} />
                   )}
                 </div>
               )}

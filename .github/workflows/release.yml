@@ -114,11 +114,14 @@ jobs:
           cache-dependency-path: cc-switch/pnpm-lock.yaml
 
       - name: Setup Rust
+        if: ${{ !matrix.rustTargets }}
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install Rust targets
+      - name: Setup Rust with targets
         if: ${{ matrix.rustTargets }}
-        run: rustup target add ${{ matrix.rustTargets }}
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rustTargets }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'

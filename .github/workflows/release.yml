@@ -123,6 +123,13 @@ jobs:
         with:
           targets: ${{ matrix.rustTargets }}
 
+      - name: Install project Rust targets
+        if: ${{ matrix.rustTargets }}
+        run: |
+          rustup toolchain install 1.95 --profile minimal --component rustfmt --component clippy
+          rustup target add --toolchain 1.95 $(echo "${{ matrix.rustTargets }}" | tr ',' ' ')
+          rustup target list --toolchain 1.95 --installed
+
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
         run: |
